@@ -66,9 +66,11 @@ bili_cookies.txt
 *.cookies.txt
 cookies.txt
 
-# Local user data & internal databases
-data/
+# Local user data & internal databases (root only)
+/data/
 DouyinPhien/
+!src/data/
+!src/data/**
 
 # Executables & runtime binary downloads (auto-downloaded by server)
 bin/
