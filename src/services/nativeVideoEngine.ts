@@ -101,7 +101,7 @@ class NativeVideoEngine {
           version: kitInfo.version || 'FFmpegKit 6.0-2 (Native C/C++)',
           isHardwareAccelerated: true,
           hardwareEncoders: { mediacodec_h264: true, neon_arm64: true },
-          details: `Thiết bị di động ${platform === 'capacitor-android' ? 'Android' : 'iOS'}, nhúng native library com.arthenica:ffmpeg-kit-full`
+          details: `Thiết bị di động ${platform === 'capacitor-android' ? 'Android' : 'iOS'}, nhúng native library dev.ffmpegkit-maintained:ffmpeg-kit-full-gpl`
         };
       } catch (err: any) {
         return {
