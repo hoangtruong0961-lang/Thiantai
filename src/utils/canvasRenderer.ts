@@ -146,10 +146,19 @@ export function renderCompositedFrame(
   const scaleFactor = vHeight / 720;
 
   // 1. Draw base video frame (with GPU Hardware acceleration if enabled)
-  if (videoSource) {
+  const isVideoValid = videoSource && (
+    !(typeof HTMLVideoElement !== 'undefined' && videoSource instanceof HTMLVideoElement) ||
+    (videoSource.readyState >= 2 && videoSource.videoWidth > 0 && videoSource.videoHeight > 0)
+  );
+
+  if (isVideoValid && videoSource) {
     let handledByGpu = false;
     if (gpuAcceleration && ctx.canvas) {
-      handledByGpu = gpuShaderEngine.processFrame(videoSource, ctx.canvas as HTMLCanvasElement, blurOverlays);
+      try {
+        handledByGpu = gpuShaderEngine.processFrame(videoSource, ctx.canvas as HTMLCanvasElement, blurOverlays);
+      } catch (_) {
+        handledByGpu = false;
+      }
     }
     if (!handledByGpu) {
       try {

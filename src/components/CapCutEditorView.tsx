@@ -3755,26 +3755,28 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
           onChange={handleReplaceVideoFileSelect}
         />
 
-        <ExportModal
-          isOpen={isExportOpen}
-          onClose={() => setIsExportOpen(false)}
-          subtitles={subtitles}
-          onImportSubtitles={setSubtitles}
-          videoUrl={videoUrl}
-          videoDuration={videoDuration}
-          styleConfig={{ ...styleConfig, roi } as any}
-          projectTitle={projectTitle}
-          onGenerateAllAudio={handleGenerateAllAudio}
-          isGeneratingAllAudio={isGeneratingAllAudio}
-          ttsSpeed={appSettings?.ttsSpeed || 1.0}
-          ttsPitch={appSettings?.ttsPitch || 0}
-          videoVolume={videoVolume}
-          blurOverlays={blurOverlays}
-          logoOverlays={logoOverlays}
-          textOverlays={textOverlays}
-          exportSettings={exportSettings}
-          onOpenExportSettings={() => setShowExportSettingsDropdown(true)}
-        />
+        {isExportOpen && (
+          <ExportModal
+            isOpen={isExportOpen}
+            onClose={() => setIsExportOpen(false)}
+            subtitles={subtitles}
+            onImportSubtitles={setSubtitles}
+            videoUrl={videoUrl}
+            videoDuration={videoDuration}
+            styleConfig={{ ...styleConfig, roi } as any}
+            projectTitle={projectTitle}
+            onGenerateAllAudio={handleGenerateAllAudio}
+            isGeneratingAllAudio={isGeneratingAllAudio}
+            ttsSpeed={appSettings?.ttsSpeed || 1.0}
+            ttsPitch={appSettings?.ttsPitch || 0}
+            videoVolume={videoVolume}
+            blurOverlays={blurOverlays}
+            logoOverlays={logoOverlays}
+            textOverlays={textOverlays}
+            exportSettings={exportSettings}
+            onOpenExportSettings={() => setShowExportSettingsDropdown(true)}
+          />
+        )}
 
         {/* Inline Config Drawer styled matching Home screen cards */}
         {showConfigDrawer && (

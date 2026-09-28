@@ -1013,9 +1013,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const rect = videoDisplayRectRef.current;
     if (!rect || !rect.width || !rect.height) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const targetW = Math.round(rect.width * dpr);
-    const targetH = Math.round(rect.height * dpr);
+    // Cap devicePixelRatio to 2.0 and clamp max dimension to prevent GPU texture limits & OOM in mobile WebViews
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const targetW = Math.max(1, Math.min(Math.round(rect.width * dpr), 1920));
+    const targetH = Math.max(1, Math.min(Math.round(rect.height * dpr), 1920));
 
     if (canvas.width !== targetW || canvas.height !== targetH) {
       canvas.width = targetW;
@@ -1025,22 +1026,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    renderCompositedFrame(ctx, {
-      videoSource: video,
-      vWidth: targetW,
-      vHeight: targetH,
-      curTime: video.currentTime || 0,
-      subtitles: activeSubtitle ? [activeSubtitle] : [],
-      activeSubtitle,
-      styleConfig,
-      blurOverlays,
-      logoOverlays,
-      textOverlays,
-      logoBitmaps: logoBitmapsRef.current,
-      subLiveBox,
-      liveRoi,
-      liveOverlay,
-    });
+    try {
+      renderCompositedFrame(ctx, {
+        videoSource: video.readyState >= 2 && video.videoWidth > 0 ? video : undefined,
+        vWidth: targetW,
+        vHeight: targetH,
+        curTime: video.currentTime || 0,
+        subtitles: activeSubtitle ? [activeSubtitle] : [],
+        activeSubtitle,
+        styleConfig,
+        blurOverlays,
+        logoOverlays,
+        textOverlays,
+        logoBitmaps: logoBitmapsRef.current,
+        subLiveBox,
+        liveRoi,
+        liveOverlay,
+      });
+    } catch (renderErr) {
+      console.warn('[VideoPlayer] renderCanvas safe catch:', renderErr);
+    }
   }, [
     activeSubtitle,
     styleConfig,

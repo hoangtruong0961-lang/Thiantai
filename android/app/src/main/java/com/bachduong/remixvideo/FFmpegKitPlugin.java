@@ -28,9 +28,15 @@ public class FFmpegKitPlugin extends Plugin {
             ret.put("buildDate", FFmpegKitConfig.getBuildDate());
             ret.put("packageType", "ffmpeg-kit-full");
             call.resolve(ret);
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to get FFmpegKit info", e);
-            call.reject("Cannot retrieve FFmpegKit info: " + e.getMessage(), e);
+        } catch (Throwable t) {
+            Log.e(TAG, "FFmpegKit getInfo failed/unavailable on this device: " + t.getMessage(), t);
+            JSObject fallback = new JSObject();
+            fallback.put("isNative", false);
+            fallback.put("platform", "android");
+            fallback.put("version", "web-fallback");
+            fallback.put("packageType", "none");
+            fallback.put("error", t.getMessage() != null ? t.getMessage() : t.toString());
+            call.resolve(fallback);
         }
     }
 
@@ -92,7 +98,7 @@ public class FFmpegKitPlugin extends Plugin {
                 }
             );
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(TAG, "FFmpegKit execution error", e);
             call.reject("FFmpeg execution exception: " + e.getMessage(), e);
         }
@@ -110,7 +116,7 @@ public class FFmpegKitPlugin extends Plugin {
             JSObject res = new JSObject();
             res.put("cancelled", true);
             call.resolve(res);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             call.reject("Failed to cancel FFmpeg session: " + e.getMessage(), e);
         }
     }

@@ -120,6 +120,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   });
 
   useEffect(() => {
+    if (!isOpen) return;
     nativeVideoEngine
       .getEngineInfo()
       .then((info) => {
@@ -127,8 +128,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       })
       .catch(() => {});
 
-    setGpuStatus(gpuShaderEngine.getStatus());
-  }, []);
+    try {
+      setGpuStatus(gpuShaderEngine.getStatus());
+    } catch (_) {}
+  }, [isOpen]);
 
   useEffect(() => {
     if (projectTitle) {

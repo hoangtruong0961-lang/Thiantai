@@ -254,6 +254,13 @@ class GpuShaderEngine {
     targetCanvas: HTMLCanvasElement | OffscreenCanvas,
     blurOverlays: BlurOverlay[] = []
   ): boolean {
+    if (!source) return false;
+    if (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement) {
+      if (source.readyState < 2 || source.videoWidth === 0 || source.videoHeight === 0) {
+        return false;
+      }
+    }
+
     const width = targetCanvas.width;
     const height = targetCanvas.height;
     if (width <= 0 || height <= 0) return false;
