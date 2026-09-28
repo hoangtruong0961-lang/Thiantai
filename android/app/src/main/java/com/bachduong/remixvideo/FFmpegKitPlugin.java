@@ -100,7 +100,8 @@ public class FFmpegKitPlugin extends Plugin {
 
         } catch (Throwable e) {
             Log.e(TAG, "FFmpegKit execution error", e);
-            call.reject("FFmpeg execution exception: " + e.getMessage(), e);
+            Exception ex = e instanceof Exception ? (Exception) e : new Exception(e);
+            call.reject("FFmpeg execution exception: " + e.getMessage(), ex);
         }
     }
 
@@ -117,7 +118,8 @@ public class FFmpegKitPlugin extends Plugin {
             res.put("cancelled", true);
             call.resolve(res);
         } catch (Throwable e) {
-            call.reject("Failed to cancel FFmpeg session: " + e.getMessage(), e);
+            Exception ex = e instanceof Exception ? (Exception) e : new Exception(e);
+            call.reject("Failed to cancel FFmpeg session: " + e.getMessage(), ex);
         }
     }
 }

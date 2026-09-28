@@ -7,16 +7,22 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('app-signing.keystore')
-            storePassword 'bachduong123'
-            keyAlias 'bachremix'
-            keyPassword 'bachduong123'
+            def ksFile = file('app-signing.keystore')
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword 'bachduong123'
+                keyAlias 'bachremix'
+                keyPassword 'bachduong123'
+            }
         }
         debug {
-            storeFile file('app-signing.keystore')
-            storePassword 'bachduong123'
-            keyAlias 'bachremix'
-            keyPassword 'bachduong123'
+            def ksFile = file('app-signing.keystore')
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword 'bachduong123'
+                keyAlias 'bachremix'
+                keyPassword 'bachduong123'
+            }
         }
     }
 
@@ -35,15 +41,20 @@ android {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            if (signingConfigs.debug.storeFile != null && signingConfigs.debug.storeFile.exists()) {
+                signingConfig signingConfigs.debug
+            }
         }
         release {
-            signingConfig signingConfigs.release
+            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
     packagingOptions {
+        pickFirst '**/libc++_shared.so'
         pickFirst 'lib/arm64-v8a/libc++_shared.so'
         pickFirst 'lib/armeabi-v7a/libc++_shared.so'
         pickFirst 'lib/x86/libc++_shared.so'
