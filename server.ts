@@ -667,7 +667,9 @@ function buildAtempoFilterChain(ratio: number): string {
 /**
  * 3-Layer Defense: Layer 3 - Post-process audio time-stretching (via FFmpeg atempo filter)
  * Compresses audio duration to match subtitle block duration while preserving natural vocal pitch.
- * Caps compression ratio at 1.25x so speech is never rushed into inaudible distortion or abrupt cutoffs.
+ * Audio Sync Limits:
+ * - NEVER slows down audio (if audio is shorter than block duration, it already fits cleanly without distortion).
+ * - Caps speedup at 1.25x so speech is never rushed into inaudible distortion or chipmunk artifacts.
  */
 async function stretchAudioWithAtempo(
   inputBuffer: Buffer,
@@ -678,12 +680,20 @@ async function stretchAudioWithAtempo(
     return { buffer: inputBuffer, duration: currentDuration };
   }
 
-  // Cap ratio between 0.45x (slow down speech for long blocks) and 1.8x (speed up speech for short blocks)
-  const rawRatio = currentDuration / targetDuration;
-  const clampedRatio = Math.max(0.45, Math.min(1.8, rawRatio));
+  // Audio Sync Safe Boundary:
+  // If audio is shorter than or equal to target duration, it ALREADY fits comfortably within the block.
+  // Slowing down audio below 1.0x creates horrific robotic slow-motion dragging voice distortion.
+  // Therefore, only speed up when audio is strictly longer than target block duration.
+  if (currentDuration <= targetDuration * 1.02) {
+    return { buffer: inputBuffer, duration: currentDuration };
+  }
 
-  // If difference is negligible (< 60ms or speed ratio within 0.98 - 1.02), no need to stretch
-  if (Math.abs(currentDuration - targetDuration) < 0.06 || (clampedRatio >= 0.98 && clampedRatio <= 1.02)) {
+  const rawRatio = currentDuration / targetDuration;
+  // Strict boundary: clamp ratio to safe range [1.02, 1.25]
+  const clampedRatio = Math.min(1.25, Math.max(1.02, rawRatio));
+
+  // If difference is negligible (< 60ms or speedup <= 1.03x), preserve natural original audio
+  if (Math.abs(currentDuration - targetDuration) < 0.06 || clampedRatio <= 1.03) {
     return { buffer: inputBuffer, duration: currentDuration };
   }
 
@@ -698,7 +708,7 @@ async function stretchAudioWithAtempo(
   try {
     fs.writeFileSync(inputPath, inputBuffer);
     const ffmpegCmd = `ffmpeg -y -i "${inputPath}" -filter:a "${filterChain}" -vn -c:a libmp3lame -q:a 2 "${outputPath}"`;
-    console.log(`[Audio Sync] Khớp thời lượng video (${(currentDuration * 1000).toFixed(0)}ms → atempo stretch ${(effectiveTargetDuration * 1000).toFixed(0)}ms [${clampedRatio.toFixed(2)}x])`);
+    console.log(`[Audio Sync] Nén nhẹ thời lượng audio (${(currentDuration * 1000).toFixed(0)}ms → atempo stretch ${(effectiveTargetDuration * 1000).toFixed(0)}ms [tốc độ ${clampedRatio.toFixed(2)}x, trần an toàn 1.25x])`);
     await execPromise(ffmpegCmd);
 
     if (fs.existsSync(outputPath)) {
@@ -1508,11 +1518,11 @@ EXTRACT AND RETURN THE FOLLOWING INFORMATION IN STRICT JSON FORMAT:
    - For Hiện đại: Specify forms like "tôi / anh / em / cậu / tớ / mày / tao / sếp / chú / bác..." based on age, hierarchy, and intimacy.
    - MANDATORY DIRECTIVE: Explicitly emphasize that the translator MUST NEVER mechanically translate the same source pronoun (e.g. "你/我" in Chinese or "you/I" in English) into the same generic Vietnamese word for all characters. Pronouns must shift dynamically based on relationships, hierarchy, and emotion in each scene.
 4. "summary": A concise 2-3 sentence overview of the video's plot, core premise, and tone.
-5. "knownEntityGlossary": Array of all identified character names, locations, organizations/sects, martial arts techniques, and key specialized terms with their standardized, authentic ${targetLang} translations (e.g., proper Sino-Vietnamese Hán-Việt transcription for Chinese names):
-   - "original": Original term/name in source language (e.g., "张无忌", "光明顶", "九阳神功")
-   - "translated": Official, standard translation in ${targetLang} (e.g., "Trương Vô Kỵ", "Quang Minh Đỉnh", "Cửu Dương Thần Công")
+5. "knownEntityGlossary": Array of all identified character names, locations, organizations/factions/sects, martial arts techniques, and key specialized terms with their standardized, authentic ${targetLang} translations (dịch trước chuẩn xác toàn bộ nhân vật, địa danh, thế lực, bang phái, phủ đệ):
+   - "original": Original term/name in source language (e.g., "张无忌", "光明顶", "苏老爷", "孙宗耀")
+   - "translated": Official, standard translation in ${targetLang} (e.g., "Trương Vô Kỵ", "Quang Minh Đỉnh", "Tô lão gia", "Tôn Tông Diệu")
    - "type": "character" | "location" | "organization" | "term" | "other"
-   - "description": Brief context or role (e.g., "Nhân vật chính, giáo chủ Minh Giáo")${userNotes}
+   - "description": Brief context or role (e.g., "Nhân vật chính, gia chủ Tô phủ")${userNotes}
 
 FULL SUBTITLE SCRIPT:
 ${fullScriptSample}`;
@@ -1680,7 +1690,7 @@ ${fullScriptSample}`;
         glossary,
         customContext,
         contextPrompt,
-        optimizeForTts = true,
+        optimizeForTts = false,
         globalContext,
         knownEntityGlossary,
         previousContext,
@@ -1722,8 +1732,18 @@ ${fullScriptSample}`;
       // If there are any uncached items, send them to Gemini with deep context chaining
       if (uncachedSubtitles.length > 0) {
         const ttsInstruction = optimizeForTts
-          ? '\nCRITICAL BREVITY REQUIREMENT: Keep each translated subtitle natural, punchy, and concise (under maxLength characters) so dubbing audio does not overflow.'
-          : '';
+          ? `
+=== CHỈ THỊ DỊCH THOẠI CHO THUYẾT MINH / LỒNG TIẾNG (DUBBING TIMING) ===
+1. ƯU TIÊN SỐ 1 LÀ TỰ NHIÊN & ĐẦY ĐỦ Ý: Câu thoại tiếng Việt phải tự nhiên, tròn vành rõ chữ, có đầu có đuôi, đúng tâm lý nhân vật và truyền tải trọn vẹn cảm xúc.
+2. TUYỆT ĐỐI KHÔNG cắt xén bừa bãi làm câu què, cộc lốc, vô lễ, khó hiểu hay mất đi các chi tiết quan trọng của câu thoại gốc.
+3. Diễn đạt súc tích khi cần thiết: Với những câu quá dài, hãy tìm cách diễn đạt bằng tiếng Việt cô đọng, gãy gọn, thanh thoát để người đọc/thuyết minh bắt kịp nhịp hình, nhưng VẪN PHẢI GIỮ ĐỦ 100% Ý NGHĨA.
+4. Giữ trọn ngữ khí và kính ngữ: Giữ đúng đại từ xưng hô và các trợ từ tình thái tự nhiên (ạ, nhé, chứ, hả...).`
+          : `
+=== NGUYÊN TẮC DỊCH THUẬT: TỰ NHIÊN, MƯỢT MÀ, TRỌN VẸN 100% Ý NGHĨA PHIM ===
+1. GIỮ TRỌN VẸN Ý NGHĨA & CẢM XÚC: Dịch đầy đủ, chính xác, không lược bớt bất kỳ thông tin, chi tiết hay hàm ý nào của câu thoại gốc. TUYỆT ĐỐI KHÔNG tóm tắt hay cắt giảm câu chữ.
+2. KHẨU KHÍ ĐIỆN ẢNH TỰ NHIÊN: Lời thoại phải tự nhiên như người Việt giao tiếp hàng ngày ngoài đời thực, câu cú mượt mà, trôi chảy, đúng phong cách phim ảnh.
+3. TRỢ TỪ NGỮ KHÍ PHONG PHÚ: Giữ đầy đủ các trợ từ ngữ khí tự nhiên của tiếng Việt (như: nhé, nha, đấy, mà, chứ, sao, cơ, ạ, dạ, hả...) để câu thoại có hồn và truyền tải đúng cảm xúc nhân vật.
+4. XƯNG HÔ LINH HOẠT THEO TÌNH HUỐNG: Đảm bảo vai vế xưng hô chuẩn xác theo mối quan hệ, tuổi tác và sắc thái tình cảm giữa các nhân vật.`;
 
         // Format Global Genre & Pronoun Directives
         let globalGenreSection = '';
@@ -1792,12 +1812,17 @@ MANDATORY OUTPUT CONSTRAINTS (QUY TẮC BẮT BUỘC):
 
 === SUBTITLES TO TRANSLATE (DỊCH DANH SÁCH NÀY) ===
 ${JSON.stringify(chunk.map((s: any) => {
-  const durSec = Math.max(0.5, (s.endTime - s.startTime) || 2.0);
-  const maxLen = Math.max(14, Math.floor(durSec * 16));
+  if (optimizeForTts) {
+    const durSec = Math.max(0.5, (s.endTime - s.startTime) || 2.0);
+    return {
+      id: s.id,
+      originalText: s.originalText,
+      targetDurationSec: Number(durSec.toFixed(1)),
+    };
+  }
   return {
     id: s.id,
     originalText: s.originalText,
-    maxLength: maxLen,
   };
 }))}`;
 
@@ -1926,6 +1951,295 @@ ${JSON.stringify(chunk.map((s: any) => {
       const hasCustomKey = !!(req.body.apiKey && req.body.apiKey.trim());
       const mode = apiMode === 'proxy' ? 'proxy' : (hasCustomKey ? 'direct_custom' : 'direct_system');
       return handleAiRouteError(err, res, 'Failed to translate subtitle batch', mode);
+    }
+  });
+
+  // 4b-1. Step 3 (Request 1): AI Subtitle Overload Screener (AI evaluates speech tempo and screens overloaded blocks)
+  app.post('/api/screen-tts-overload', async (req, res) => {
+    try {
+      const {
+        subtitles, // Array<{ id: string | number, text?: string, translatedText?: string, originalText?: string, duration?: number, startTime?: number, endTime?: number }>
+        targetLang = 'Tiếng Việt',
+      } = req.body;
+
+      if (!subtitles || !Array.isArray(subtitles) || subtitles.length === 0) {
+        res.json({ success: true, overloadedItems: [] });
+        return;
+      }
+
+      let { ai, selectedModel } = getAiClientAndModel(req.body);
+      if (selectedModel === 'GEMINI_WEB') {
+        selectedModel = 'gemini-2.5-flash';
+      }
+
+      // Format input for screening
+      const inputFormatted = subtitles.map((s: any) => {
+        const durSec = Math.max(0.3, Number(s.duration || (s.endTime - s.startTime)) || 1.5);
+        const text = String(s.text || s.translatedText || s.originalText || '').trim();
+        const wordCount = text.split(/\s+/).filter(Boolean).length;
+        return {
+          id: s.id,
+          text: text,
+          durationSec: Number(durSec.toFixed(2)),
+          wordCount: wordCount,
+        };
+      });
+
+      const BATCH_SIZE = 40;
+      const chunks: any[][] = [];
+      for (let i = 0; i < inputFormatted.length; i += BATCH_SIZE) {
+        chunks.push(inputFormatted.slice(i, i + BATCH_SIZE));
+      }
+
+      const allOverloaded: { id: string | number; text: string; duration: number; reason: string; targetWords?: number }[] = [];
+
+      for (const chunk of chunks) {
+        const prompt = `You are a professional film voiceover director, dubbing supervisor, and subtitle timing editor for Vietnamese Text-To-Speech (TTS).
+Analyze the following subtitle blocks and their display durations in seconds ("durationSec").
+Identify ONLY the subtitle blocks whose dialogue is genuinely OVERLOADED for Vietnamese voiceover — meaning there are too many words/syllables to be spoken naturally, clearly, and comfortably within its durationSec without rushing, clipping, or unnatural speedups.
+
+CRITERIA:
+- Natural Vietnamese voiceover tempo is approx 2.5 to 3.5 words per second.
+- A block of 1.0s with 7-8 words is heavily overloaded.
+- A block of 2.5s with 6-7 words is NOT overloaded.
+- Do NOT flag sentences that can be comfortably spoken within the durationSec.
+
+For each genuinely overloaded block, return its "id", a brief "reason" in Vietnamese, and recommended "targetWords".
+Return strictly a JSON array:
+[
+  {
+    "id": 1,
+    "reason": "Thời lượng 1.2s quá ngắn cho câu 8 từ, nhịp đọc bị dồn",
+    "targetWords": 4
+  }
+]
+If NO subtitles are overloaded, return strictly: [].
+
+Input Subtitles:
+${JSON.stringify(chunk, null, 2)}`;
+
+        let responseText = '';
+
+        if (req.body.apiMode === 'gemini_web' && req.body.geminiWebCookie) {
+          const session = await validateAndExtractGeminiWebSession(req.body.geminiWebCookie.trim());
+          if (!session.valid || !session.snlm0e) {
+            throw new Error(session.error || 'Phiên Google Account Gemini Web đã hết hạn.');
+          }
+          const rpcRes = await executeGeminiWebPrompt(prompt, session);
+          if (!rpcRes.success || !rpcRes.text) {
+            throw new Error(rpcRes.error || 'Lỗi nhận dữ liệu từ Google Gemini Web RPC.');
+          }
+          responseText = rpcRes.text.trim();
+        } else {
+          const isProxyMode = (req.body.apiMode === 'proxy');
+          const genConfig: any = {
+            responseMimeType: 'application/json',
+          };
+
+          if (!isProxyMode) {
+            genConfig.responseSchema = {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  reason: { type: Type.STRING },
+                  targetWords: { type: Type.NUMBER },
+                },
+                required: ['id'],
+              },
+            };
+          }
+
+          console.log(`[Screen TTS Overload] AI screening ${chunk.length} subtitle blocks for TTS pacing with ${selectedModel}...`);
+          const response = await generateContentWithRetry(ai, {
+            model: selectedModel,
+            contents: prompt,
+            config: genConfig,
+          });
+          responseText = (response.text || '[]').trim();
+        }
+
+        if (responseText.startsWith('```')) {
+          responseText = responseText.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+        }
+
+        let parsed: any[] = [];
+        try {
+          parsed = JSON.parse(responseText);
+        } catch {
+          const match = responseText.match(/\[[\s\S]*\]/);
+          if (match) {
+            try { parsed = JSON.parse(match[0]); } catch (_) {}
+          }
+        }
+
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (item && item.id !== undefined) {
+              const originalItem = chunk.find((c: any) => String(c.id) === String(item.id));
+              if (originalItem) {
+                allOverloaded.push({
+                  id: originalItem.id,
+                  text: originalItem.text,
+                  duration: originalItem.durationSec,
+                  reason: item.reason || 'Quá tải thời lượng đọc TTS',
+                  targetWords: item.targetWords,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        overloadedItems: allOverloaded,
+      });
+    } catch (err: any) {
+      console.error('[Screen TTS Overload] Error:', err);
+      const apiMode = req.body.apiMode || 'direct';
+      const hasCustomKey = !!(req.body.apiKey && req.body.apiKey.trim());
+      const mode = apiMode === 'proxy' ? 'proxy' : (hasCustomKey ? 'direct_custom' : 'direct_system');
+      return handleAiRouteError(err, res, 'Failed to screen overloaded TTS subtitles', mode);
+    }
+  });
+
+  // 4b-2. Step 3 (Request 2): AI Subtitle Overload Optimizer (Targeted rewriting for screened overloaded lines)
+  app.post('/api/optimize-tts-overload', async (req, res) => {
+    try {
+      const {
+        overloadedBlocks, // Array<{ id: string | number, text: string, duration: string | number, reason?: string, targetWords?: number }>
+        targetLang = 'Tiếng Việt',
+      } = req.body;
+
+      if (!overloadedBlocks || !Array.isArray(overloadedBlocks) || overloadedBlocks.length === 0) {
+        res.json({ success: true, optimizedBlocks: [] });
+        return;
+      }
+
+      let { ai, selectedModel } = getAiClientAndModel(req.body);
+      if (selectedModel === 'GEMINI_WEB') {
+        selectedModel = 'gemini-2.5-flash';
+      }
+
+      // Chunk into batches of 25 to ensure reliable output and no token cutoffs
+      const BATCH_SIZE = 25;
+      const chunks: any[][] = [];
+      for (let i = 0; i < overloadedBlocks.length; i += BATCH_SIZE) {
+        chunks.push(overloadedBlocks.slice(i, i + BATCH_SIZE));
+      }
+
+      const allOptimized: { id: string | number; text: string }[] = [];
+
+      for (const chunk of chunks) {
+        const inputFormatted = chunk.map((b: any) => {
+          let durStr = String(b.duration || '1.5');
+          durStr = durStr.replace('.', ',');
+          return {
+            id: b.id,
+            text: String(b.text || ''),
+            durationSec: durStr,
+            issue: b.reason || 'Quá dài so với thời lượng',
+            targetWords: b.targetWords,
+          };
+        });
+
+        const prompt = `You are a master dialogue localizer and voiceover adapter for Vietnamese film dubbing and Text-To-Speech (TTS).
+The following subtitle blocks were screened by the voiceover director as OVERLOADED for their display duration.
+Rewrite and optimize the "text" of each block following these professional voiceover dubbing rules:
+
+1. RÚT GỌN TỰ NHIÊN, CÔ ĐỌNG: Viết lại câu thoại ngắn gọn, súc tích, gãy gọn, giàu cảm xúc để giọng đọc TTS phát âm thoải mái, tự nhiên trong đúng thời lượng hiển thị (durationSec).
+2. GIỮ NGUYÊN 100% Ý NGHĨA & CẢM XÚC: Không thêm thắt điều bịa đặt, không làm biến đổi nghĩa gốc hay làm câu cộc lốc, vô nghĩa.
+3. TUYỆT ĐỐI BẢO LƯU ĐẠI TỪ XƯNG HÔ (PRONOUNS): Giữ nguyên quan hệ xưng hô của nhân vật (chú/cháu, anh/em, tôi/cô, ta/ngươi, sếp/em...) y như câu gốc.
+4. KHÔNG DÙNG DẤU NGOẶC KÉP, KHÔNG CHÚ THÍCH: Chỉ trả về duy nhất lời thoại lồng tiếng hoàn chỉnh.
+
+Format: [{"id": 1, "text": "câu thoại ngắn gọn đã tối ưu"}]
+
+Input Blocks to Optimize:
+${JSON.stringify(inputFormatted, null, 2)}`;
+
+        let responseText = '';
+
+        if (req.body.apiMode === 'gemini_web' && req.body.geminiWebCookie) {
+          const session = await validateAndExtractGeminiWebSession(req.body.geminiWebCookie.trim());
+          if (!session.valid || !session.snlm0e) {
+            throw new Error(session.error || 'Phiên Google Account Gemini Web đã hết hạn hoặc không hợp lệ.');
+          }
+          const rpcRes = await executeGeminiWebPrompt(prompt, session);
+          if (!rpcRes.success || !rpcRes.text) {
+            throw new Error(rpcRes.error || 'Lỗi nhận dữ liệu từ Google Gemini Web RPC.');
+          }
+          responseText = rpcRes.text.trim();
+        } else {
+          const isProxyMode = (req.body.apiMode === 'proxy');
+          const genConfig: any = {
+            responseMimeType: 'application/json',
+          };
+
+          if (!isProxyMode) {
+            genConfig.responseSchema = {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                },
+                required: ['id', 'text'],
+              },
+            };
+          }
+
+          console.log(`[Optimize TTS Overload] Rewriting ${chunk.length} overloaded subtitle blocks with ${selectedModel}...`);
+          const response = await generateContentWithRetry(ai, {
+            model: selectedModel,
+            contents: prompt,
+            config: genConfig,
+          });
+          responseText = (response.text || '[]').trim();
+        }
+
+        if (responseText.startsWith('```')) {
+          responseText = responseText.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+        }
+
+        let parsed: any[] = [];
+        try {
+          parsed = JSON.parse(responseText);
+        } catch (e) {
+          console.warn('[Optimize TTS Overload] JSON parse failed, trying regex match:', e);
+          const match = responseText.match(/\[[\s\S]*\]/);
+          if (match) {
+            try {
+              parsed = JSON.parse(match[0]);
+            } catch (_) {}
+          }
+        }
+
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (item && item.id !== undefined && item.text) {
+              const cleaned = cleanTranslatedSubtitleText(String(item.text));
+              allOptimized.push({
+                id: item.id,
+                text: cleaned,
+              });
+            }
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        optimizedBlocks: allOptimized,
+      });
+    } catch (err: any) {
+      console.error('[Optimize TTS Overload] Error:', err);
+      const apiMode = req.body.apiMode || 'direct';
+      const hasCustomKey = !!(req.body.apiKey && req.body.apiKey.trim());
+      const mode = apiMode === 'proxy' ? 'proxy' : (hasCustomKey ? 'direct_custom' : 'direct_system');
+      return handleAiRouteError(err, res, 'Failed to optimize overloaded TTS subtitles', mode);
     }
   });
 
@@ -3093,21 +3407,18 @@ ${JSON.stringify(compactChunk)}`;
     let speed = Number(ttsSpeed) || 1.0;
 
     // 3-Layer Sync Defense - Layer 2: Pre-calculate CPS and adjust TTS voice speed before audio generation
+    // BOUNDARY: NEVER slow down speech below user setting (min 0.95x) to eliminate robotic slow motion.
+    // When text is tight (high CPS), allow mild speedup capped strictly at 1.25x.
     if (enableAudioSync && targetDur && targetDur > 0.3) {
       const cps = cleanText.length / targetDur;
       if (cps > 14.0) {
-        const requiredSpeed = Math.min(1.8, Math.max(1.0, cps / 13.0));
-        if (requiredSpeed >= 1.25) {
-          console.log(`⚡ Đang tối ưu tốc độ đọc lên ≥ ${requiredSpeed.toFixed(1)}x để giảm số block cần xử lý tốc độ trong lần tạo sau`);
-          speed = Math.min(2.0, Math.round(speed * requiredSpeed * 100) / 100);
-        }
-      } else if (cps < 6.0 && cleanText.length >= 3) {
-        const requiredSpeed = Math.max(0.65, Math.round((cps / 8.0) * 100) / 100);
-        if (requiredSpeed <= 0.85) {
-          console.log(`🐢 Đang giảm tốc độ đọc xuống ${requiredSpeed.toFixed(2)}x để phủ đều thời lượng block dài (${targetDur.toFixed(1)}s)`);
-          speed = Math.max(0.6, Math.round(speed * requiredSpeed * 100) / 100);
+        const requiredSpeed = Math.min(1.22, Math.max(1.0, cps / 13.5));
+        if (requiredSpeed >= 1.08) {
+          speed = Math.min(1.25, Math.round(speed * requiredSpeed * 100) / 100);
         }
       }
+      // Strictly bound speed: never drop below 0.95x (no dragging/slow motion), never exceed 1.25x (no chipmunk)
+      speed = Math.max(0.95, Math.min(1.25, speed));
     }
     
     let voiceKeyForCache = voice;
@@ -3705,8 +4016,9 @@ ${JSON.stringify(compactChunk)}`;
         audioDuration = getMp3BufferDuration(audioBuffer);
       }
 
-      // Stretch/compress audio duration to match block target duration smoothly using FFmpeg atempo
-      if (Math.abs(audioDuration - targetDur) > 0.08) {
+      // Only compress audio duration if audio duration exceeds block target duration by > 80ms.
+      // If audio is shorter than target duration, DO NOT stretch slower! It already fits without distortion.
+      if (audioDuration > targetDur + 0.08) {
         const stretchRes = await stretchAudioWithAtempo(audioBuffer, audioDuration, targetDur);
         audioBuffer = stretchRes.buffer;
         audioDuration = stretchRes.duration;

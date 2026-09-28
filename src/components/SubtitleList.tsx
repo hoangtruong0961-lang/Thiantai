@@ -118,7 +118,7 @@ const SubtitleCard: React.FC<SubtitleCardProps> = React.memo(
 
             <div>
               <label className="block text-[10px] text-slate-400 mb-0.5">
-                Bản dịch:
+                Bản dịch (Hiển thị &amp; Đọc TTS):
               </label>
               <input
                 type="text"
@@ -126,7 +126,7 @@ const SubtitleCard: React.FC<SubtitleCardProps> = React.memo(
                 onChange={(e) =>
                   setEditForm({ ...editForm, translatedText: e.target.value })
                 }
-                className="w-full bg-slate-900 border border-slate-700 text-xs px-2.5 py-1.5 rounded text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
+                className="w-full bg-slate-900 border border-slate-700 text-xs px-2.5 py-1.5 rounded text-slate-200 focus:outline-none focus:border-indigo-500"
               />
             </div>
 

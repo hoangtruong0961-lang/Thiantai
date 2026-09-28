@@ -1004,7 +1004,7 @@ export const CapCutBottomBar: React.FC<CapCutBottomBarProps> = ({
   }, [appSettings?.bgFilterStrength]);
   const isAiRefineActive = appSettings?.autoAiRefine !== false;
   const isAdaptiveSamplingActive = appSettings?.adaptiveSampling !== false;
-  const [optimizeForTts, setOptimizeForTts] = useState<boolean>(true);
+  const [optimizeForTts, setOptimizeForTts] = useState<boolean>(false);
 
   const handleToggleAiRefine = (enabled: boolean) => {
     if (onSaveSettings) {
@@ -1148,14 +1148,16 @@ export const CapCutBottomBar: React.FC<CapCutBottomBarProps> = ({
                       placeholder="Nhập chữ gốc..."
                     />
 
-                    <label className="text-[11px] font-semibold text-amber-400 mt-1">Bản dịch (Hiển thị):</label>
-                    <textarea
-                      value={editTextTranslated}
-                      onChange={(e) => setEditTextTranslated(e.target.value)}
-                      rows={2}
-                      className="w-full bg-[#101013] border border-amber-500/50 rounded-lg p-2 text-xs text-amber-200 font-medium focus:outline-none focus:border-amber-400"
-                      placeholder="Nhập bản dịch tiếng Việt..."
-                    />
+                    <div className="flex flex-col gap-1 mt-1">
+                      <label className="text-[11px] font-semibold text-amber-400">Bản dịch (Hiển thị &amp; Đọc TTS):</label>
+                      <textarea
+                        value={editTextTranslated}
+                        onChange={(e) => setEditTextTranslated(e.target.value)}
+                        rows={2}
+                        className="w-full bg-[#101013] border border-slate-700 rounded-lg p-2 text-xs font-medium focus:outline-none text-slate-200 focus:border-sky-400"
+                        placeholder="Nhập bản dịch tiếng Việt..."
+                      />
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
@@ -2059,24 +2061,25 @@ export const CapCutBottomBar: React.FC<CapCutBottomBarProps> = ({
                     </div>
                   </div>
 
-                  {/* Checkbox: Tối ưu hóa cho thuyết minh (TTS) */}
-                  <label className="flex items-center space-x-3 cursor-pointer py-1 select-none">
-                    <input
-                      type="checkbox"
-                      checked={optimizeForTts}
-                      onChange={(e) => setOptimizeForTts(e.target.checked)}
-                      className="w-5 h-5 rounded bg-[#212126] border-zinc-600 text-sky-500 focus:ring-0 accent-sky-500 cursor-pointer"
-                    />
-                    <span className="text-sm font-medium text-white">Tối ưu hóa cho thuyết minh (TTS)</span>
-                  </label>
+                  {/* Card giới thiệu quy trình 3 bước chuyên nghiệp */}
+                  <div className="bg-[#1c1c21] p-3 rounded-xl border border-zinc-800/80 flex flex-col gap-1.5 text-xs text-zinc-300">
+                    <div className="font-extrabold text-sky-400 flex items-center space-x-1.5">
+                      <span>⚡ QUY TRÌNH 3 BƯỚC ĐỒNG BỘ & DỊCH CHUẨN TTS</span>
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-zinc-400 space-y-0.5">
+                      <p><strong className="text-zinc-200">1. Ngữ cảnh:</strong> Đồng bộ & dịch trước nhân vật, địa danh, thế lực.</p>
+                      <p><strong className="text-zinc-200">2. Dịch chính:</strong> Dịch full 100% ngữ nghĩa & cảm xúc tự nhiên.</p>
+                      <p><strong className="text-zinc-200">3. Tối ưu TTS:</strong> Tự động rà soát & rút gọn các câu quá tải thời lượng đọc.</p>
+                    </div>
+                  </div>
 
-                  {/* Action Button */}
+                  {/* Main Action Button */}
                   <button
-                    onClick={() => onReTranslateAll(selectedModel, optimizeForTts, contextPrompt)}
+                    onClick={() => onReTranslateAll(selectedModel, false, contextPrompt)}
                     disabled={isTranslatingBatch || subtitles.length === 0}
-                    className="w-full mt-2 py-3.5 btn-metallic text-slate-950 disabled:opacity-50 font-black text-sm sm:text-base rounded-xl transition shadow-lg active:scale-98 flex items-center justify-center uppercase tracking-wider cursor-pointer"
+                    className="w-full mt-1 py-3.5 btn-metallic text-slate-950 disabled:opacity-50 font-black text-sm sm:text-base rounded-xl transition shadow-lg active:scale-98 flex items-center justify-center uppercase tracking-wider cursor-pointer"
                   >
-                    {isTranslatingBatch ? (translationProgressMsg || 'Đang dịch lại...') : 'DỊCH LẠI TOÀN BỘ'}
+                    {isTranslatingBatch ? (translationProgressMsg || 'Đang xử lý quy trình 3 bước...') : 'DỊCH TOÀN BỘ (QUY TRÌNH 3 BƯỚC)'}
                   </button>
                 </div>
               )}
@@ -2501,7 +2504,7 @@ export const CapCutBottomBar: React.FC<CapCutBottomBarProps> = ({
                           </span>
                         </div>
                         <span className="text-[11px] text-zinc-400 block leading-tight">
-                          Tự động dãn/nén tốc độ giọng đọc (atempo) để khớp hoàn toàn với độ dài khung từng block phụ đề.
+                          Tự động nén nhẹ tốc độ đọc (trần an toàn 1.0x - 1.25x) khi câu nói dài hơn khung hình. Tuyệt đối không kéo chậm hay làm méo giọng khi câu ngắn.
                         </span>
                       </label>
                     </div>
@@ -2529,6 +2532,7 @@ export const CapCutBottomBar: React.FC<CapCutBottomBarProps> = ({
 
                   {/* 6. MAIN ACTION BUTTON: TẠO AUDIO */}
                   <div className="pt-2 space-y-2">
+
                     <button
                       type="button"
                       onClick={async () => {

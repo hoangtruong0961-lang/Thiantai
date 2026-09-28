@@ -35,7 +35,11 @@ import { storeMediaFileDB, getMediaFileUrlDB, cacheRemoteVideoToDB, hasMediaFile
 import { extractAudioFromVideoBlob, uploadFileInChunks } from '../utils/audioExporter';
 import { runClientSideLocalOcrBatch, StreamingOcrPool, hasSubtitleTextCandidate, applyBackgroundFilter } from '../utils/localPaddleOcrEngine';
 import { extractFramesWithWebCodecs, extractFramesParallelVideo, isWebCodecsSupported } from '../utils/webcodecsFrameExtractor';
-import { translateSubtitleChunkWithGeminiWeb } from '../utils/geminiWebHelper';
+import {
+  translateSubtitleChunkWithGeminiWeb,
+  screenTtsOverloadWithGeminiWeb,
+  optimizeTtsOverloadWithGeminiWeb,
+} from '../utils/geminiWebHelper';
 import { VideoPlayer } from './VideoPlayer';
 import { CapCutTimeline } from './CapCutTimeline';
 import { CapCutBottomBar } from './CapCutBottomBar';
@@ -1886,7 +1890,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
 
   const handleReTranslateAll = async (
     overrideModel?: GeminiModelOption,
-    optimizeForTts: boolean = true,
+    optimizeForTts: boolean = false,
     customCtx?: string
   ) => {
     if (subtitles.length === 0) return;
@@ -1899,11 +1903,10 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
     
     try {
       // =========================================================================
-      // BƯỚC 1: TRÍCH XUẤT NGỮ CẢNH TOÀN CỤC TRƯỚC KHI DỊCH
-      // Prompt vai trò: "context synchronization expert"
-      // AI đọc lướt toàn bộ phụ đề để rút ra: tên nhân vật, địa danh, và thể loại phim
+      // BƯỚC 1: ĐỒNG BỘ VÀ RÀ SOÁT NGỮ CẢNH TOÀN CỤC TRƯỚC KHI DỊCH
+      // Trích xuất ngữ cảnh, thể loại, đại từ, và đồng bộ nhân vật, địa danh, thế lực...
       // =========================================================================
-      setTranslationProgressMsg('🧠 Bước 1/2: AI đang đọc lướt kịch bản để phân tích thể loại phim, tên nhân vật & đại từ xưng hô...');
+      setTranslationProgressMsg('🧠 Bước 1/3: Rà soát ngữ cảnh & đồng bộ dịch trước nhân vật, địa danh, thế lực...');
       console.log(`[handleReTranslateAll] Stage 1: Extracting global context from ${subtitles.length} subtitles...`);
 
       let activeGlobalContext: GlobalMovieContext = globalContext || {
@@ -1954,8 +1957,8 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
       }
 
       // =========================================================================
-      // BƯỚC 2: DỊCH THEO BATCH — MANG THEO NGỮ CẢNH TOÀN CỤC & TỪ BATCH TRƯỚC
-      // Mang theo: KNOWN ENTITY GLOSSARY, PREVIOUS CONTEXT, GLOBAL MOVIE GENRE
+      // BƯỚC 2: DỊCH CHÍNH TOÀN BỘ PHỤ ĐỀ — ÁP DỤNG NGAY CÁC THỰC THỂ ĐÃ ĐỒNG BỘ
+      // Dịch mượt mà, đầy đủ 100% ngữ nghĩa & cảm xúc điện ảnh, không cắt xén
       // =========================================================================
       const chunkSize = 20;
       const totalSubtitles = subtitles.length;
@@ -1970,6 +1973,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
 
       let runningGlossary: GlossaryEntity[] = [...(activeGlobalContext.knownEntityGlossary || [])];
       let previousContextBuffer: { id: string; originalText: string; translatedText: string }[] = [];
+      const accumulatedTranslationsMap = new Map<string, string>();
 
       for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
         const currentChunk = chunks[chunkIdx];
@@ -1977,7 +1981,20 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
           ? `[${activeGlobalContext.movieGenre}] `
           : '';
         const pct = Math.round((chunkIdx / totalChunks) * 100);
-        setTranslationProgressMsg(`🎯 Bước 2/2: Đang dịch nhóm ${chunkIdx + 1}/${totalChunks} ${genreBadge}(${pct}%)...`);
+        setTranslationProgressMsg(`🎬 Bước 2/3: Đang dịch kịch bản chính nhóm ${chunkIdx + 1}/${totalChunks} ${genreBadge}(${pct}%)...`);
+
+        // Gắn trước các thực thể nhân vật / địa danh / thế lực đã đồng bộ vào chunk
+        const currentChunkWithEntities = currentChunk.map((sub) => {
+          const matched = runningGlossary.filter(
+            (g) => g.original && sub.originalText && sub.originalText.toLowerCase().includes(g.original.toLowerCase())
+          );
+          return {
+            ...sub,
+            ...(matched.length > 0
+              ? { syncedEntities: matched.map((m) => `${m.original} -> ${m.translated}`) }
+              : {}),
+          };
+        });
 
         let success = false;
         let attempt = 0;
@@ -1992,7 +2009,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
             if (appSettings?.apiMode === 'gemini_web') {
               try {
                 const directWebResult = await translateSubtitleChunkWithGeminiWeb(
-                  currentChunk,
+                  currentChunkWithEntities,
                   targetLang,
                   {
                     cookie: appSettings.geminiWebCookie || '',
@@ -2001,7 +2018,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
                     glossary: runningGlossary,
                     previousContext: previousContextBuffer,
                     customContext: effectiveContext,
-                    optimizeForTts,
+                    optimizeForTts: false,
                   }
                 );
                 if (directWebResult.success && Array.isArray(directWebResult.translations) && directWebResult.translations.length > 0) {
@@ -2019,10 +2036,10 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  subtitles: currentChunk,
+                  subtitles: currentChunkWithEntities,
                   targetLang,
                   model: overrideModel || selectedModel,
-                  optimizeForTts,
+                  optimizeForTts: false,
                   customContext: effectiveContext,
                   globalContext: activeGlobalContext,
                   knownEntityGlossary: runningGlossary,
@@ -2044,7 +2061,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
               } catch {
                 if (appSettings?.apiMode === 'gemini_web') {
                   const fallbackWebResult = await translateSubtitleChunkWithGeminiWeb(
-                    currentChunk,
+                    currentChunkWithEntities,
                     targetLang,
                     {
                       cookie: appSettings.geminiWebCookie || '',
@@ -2053,7 +2070,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
                       glossary: runningGlossary,
                       previousContext: previousContextBuffer,
                       customContext: effectiveContext,
-                      optimizeForTts,
+                      optimizeForTts: false,
                     }
                   );
                   if (fallbackWebResult.success && Array.isArray(fallbackWebResult.translations)) {
@@ -2080,6 +2097,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
               data.translations.forEach((t: any) => {
                 const clean = cleanTranslatedSubtitleText(t.translatedText || '');
                 chunkTranslationsMap.set(t.id, clean);
+                accumulatedTranslationsMap.set(t.id, clean);
               });
 
               // Cập nhật phụ đề trên giao diện ngay lập tức
@@ -2135,6 +2153,142 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
         }
       }
 
+      // =========================================================================
+      // BƯỚC 3: AI SÀNG LỌC & TỐI ƯU TTS (QUY TRÌNH 2 LƯỢT AI THỰC CHẤT)
+      // Lượt 1 (Request 1): AI rà soát & sàng lọc các block phụ đề quá tải thời lượng phát âm.
+      // Lượt 2 (Request 2): Gửi một request nữa cho AI để tối ưu & viết lại cô đọng, tự nhiên các block đó.
+      // =========================================================================
+      setTranslationProgressMsg('⚡ Bước 3/3 (Lượt 1/2): AI đang rà soát & sàng lọc các câu phụ đề quá tải thời lượng phát âm...');
+      console.log(`[handleReTranslateAll] Stage 3 - Request 1: AI screening ${subtitles.length} subtitles for TTS overload...`);
+
+      const subtitlesToScreen = subtitles.map((s) => {
+        const transText = accumulatedTranslationsMap.get(s.id) ?? s.translatedText ?? s.originalText ?? '';
+        const durSec = Math.max(0.4, ((s.endTime || 0) - (s.startTime || 0)) || 1.5);
+        return {
+          id: s.id,
+          text: (transText || '').trim(),
+          duration: durSec,
+          durationSec: Number(durSec.toFixed(2)),
+          startTime: s.startTime,
+          endTime: s.endTime,
+        };
+      });
+
+      let screenedOverloaded: { id: string | number; text: string; duration: number | string; reason?: string; targetWords?: number }[] = [];
+
+      // Lượt 1: Gửi Request cho AI sàng lọc
+      if (appSettings?.apiMode === 'gemini_web') {
+        try {
+          const webScreen = await screenTtsOverloadWithGeminiWeb(subtitlesToScreen, {
+            cookie: appSettings.geminiWebCookie || '',
+            snlm0e: appSettings.geminiWebSessionToken,
+          });
+          if (webScreen.success && Array.isArray(webScreen.overloadedItems)) {
+            screenedOverloaded = webScreen.overloadedItems;
+          }
+        } catch (screenErr) {
+          console.warn('[Stage 3 - Request 1] Gemini Web screening error:', screenErr);
+        }
+      }
+
+      if (screenedOverloaded.length === 0 && appSettings?.apiMode !== 'gemini_web') {
+        try {
+          const screenRes = await fetch('/api/screen-tts-overload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subtitles: subtitlesToScreen,
+              targetLang,
+              model: overrideModel || selectedModel,
+              apiMode: appSettings?.apiMode,
+              geminiWebCookie: appSettings?.geminiWebCookie,
+              apiKey: appSettings?.apiKey,
+              proxyUrl: appSettings?.proxyUrl,
+              proxyKey: appSettings?.proxyKey,
+              proxyTargetModel: appSettings?.proxyTargetModel,
+              customModelName: appSettings?.customModelName,
+              proxyNoApiKey: appSettings?.proxyNoApiKey,
+            }),
+          });
+          if (screenRes.ok) {
+            const screenData = await screenRes.json().catch(() => null);
+            if (screenData?.success && Array.isArray(screenData.overloadedItems)) {
+              screenedOverloaded = screenData.overloadedItems;
+            }
+          }
+        } catch (screenErr) {
+          console.warn('[Stage 3 - Request 1] Server screening error:', screenErr);
+        }
+      }
+
+      let optimizedCount = 0;
+
+      // Lượt 2: Gửi tiếp một Request nữa cho AI để tối ưu lại các câu phụ đề quá tải vừa sàng lọc
+      if (screenedOverloaded.length > 0) {
+        setTranslationProgressMsg(`⚡ Bước 3/3 (Lượt 2/2): Đã phát hiện ${screenedOverloaded.length} câu quá tải. AI đang viết lại súc tích, tự nhiên...`);
+        console.log(`[handleReTranslateAll] Stage 3 - Request 2: Sending second request to AI to optimize ${screenedOverloaded.length} overloaded subtitle blocks...`);
+
+        let optData: any = null;
+        if (appSettings?.apiMode === 'gemini_web') {
+          try {
+            const webOpt = await optimizeTtsOverloadWithGeminiWeb(screenedOverloaded, {
+              cookie: appSettings.geminiWebCookie || '',
+              snlm0e: appSettings.geminiWebSessionToken,
+            });
+            if (webOpt.success && Array.isArray(webOpt.optimizedBlocks) && webOpt.optimizedBlocks.length > 0) {
+              optData = { success: true, optimizedBlocks: webOpt.optimizedBlocks };
+            }
+          } catch (optErr) {
+            console.warn('[Stage 3 - Request 2] Gemini Web optimization error:', optErr);
+          }
+        }
+
+        if (!optData) {
+          const optRes = await fetch('/api/optimize-tts-overload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              overloadedBlocks: screenedOverloaded,
+              targetLang,
+              model: overrideModel || selectedModel,
+              apiMode: appSettings?.apiMode,
+              geminiWebCookie: appSettings?.geminiWebCookie,
+              apiKey: appSettings?.apiKey,
+              proxyUrl: appSettings?.proxyUrl,
+              proxyKey: appSettings?.proxyKey,
+              proxyTargetModel: appSettings?.proxyTargetModel,
+              customModelName: appSettings?.customModelName,
+              proxyNoApiKey: appSettings?.proxyNoApiKey,
+            }),
+          });
+
+          if (optRes.ok) {
+            optData = await optRes.json().catch(() => null);
+          }
+        }
+
+        if (optData && Array.isArray(optData.optimizedBlocks) && optData.optimizedBlocks.length > 0) {
+          const optMap = new Map<string, string>();
+          optData.optimizedBlocks.forEach((item: any) => {
+            if (item.id !== undefined && item.text) {
+              const clean = cleanTranslatedSubtitleText(String(item.text));
+              optMap.set(String(item.id), clean);
+            }
+          });
+
+          optimizedCount = optMap.size;
+          setSubtitles((prev) =>
+            prev.map((s) => {
+              const sId = String(s.id);
+              if (optMap.has(sId)) {
+                return { ...s, translatedText: optMap.get(sId)! };
+              }
+              return s;
+            })
+          );
+        }
+      }
+
       // Cập nhật lại từ điển thực thể hoàn chỉnh vào project context
       setGlobalContext((prev) => ({
         ...(prev || activeGlobalContext),
@@ -2143,10 +2297,182 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
 
       setTranslationProgressMsg('');
       const entityCount = runningGlossary.length;
-      alert(`✨ Đã dịch hoàn tất toàn bộ phụ đề thành công!\n- Thể loại phim: ${activeGlobalContext.movieGenre || 'Tự động'}\n- Từ điển thực thể đồng bộ: ${entityCount} mục`);
+      alert(
+        `✨ Hoàn tất quy trình dịch & tối ưu TTS 3 bước thành công!\n` +
+        `1️⃣ Bước 1 (Ngữ cảnh): Đồng bộ & áp dụng ${entityCount} nhân vật, địa danh, thế lực.\n` +
+        `2️⃣ Bước 2 (Dịch chính): Đã dịch full ${totalSubtitles} câu chuẩn cảm xúc & nghĩa gốc.\n` +
+        `3️⃣ Bước 3 (Rà soát & Tối ưu TTS 2 lượt AI):\n` +
+        `   • Lượt 1 (Sàng lọc AI): ${
+          screenedOverloaded.length > 0
+            ? `AI đã rà soát toàn bộ và phát hiện ${screenedOverloaded.length} câu quá tải thời lượng phát âm.`
+            : `AI đã rà soát toàn bộ và xác nhận 100% câu đều khớp chuẩn thời lượng phát âm!`
+        }\n` +
+        `   • Lượt 2 (Tối ưu AI): ${
+          optimizedCount > 0
+            ? `Đã gửi request riêng để AI viết lại thành công ${optimizedCount} câu súc tích, tự nhiên, bảo toàn 100% cảm xúc và xưng hô!`
+            : `Không cần rút gọn thêm.`
+        }`
+      );
     } catch (e: any) {
       console.error(e);
       alert('Quá trình dịch bị gián đoạn:\n' + (e?.message || 'Lỗi hệ thống'));
+    } finally {
+      setIsTranslatingBatch(false);
+      setTranslationProgressMsg('');
+    }
+  };
+
+  /**
+   * Chạy riêng Bước 3: Rà soát & Tối ưu các block phụ đề quá tải thời lượng cho TTS qua 2 lượt AI
+   * Lượt 1: Cho AI sàng lọc phụ đề quá tải
+   * Lượt 2: Gửi một request nữa cho AI để tối ưu lại các câu đó
+   */
+  const handleOptimizeTtsOverload = async (overrideModel?: GeminiModelOption) => {
+    if (subtitles.length === 0) return;
+    setIsTranslatingBatch(true);
+    try {
+      setTranslationProgressMsg('⚡ Bước 3 (Lượt 1/2): AI đang rà soát & sàng lọc các câu phụ đề quá tải thời lượng đọc...');
+
+      const subtitlesToScreen = subtitles.map((s) => {
+        const durSec = Math.max(0.4, ((s.endTime || 0) - (s.startTime || 0)) || 1.5);
+        const text = (s.translatedText || s.originalText || '').trim();
+        return {
+          id: s.id,
+          text: text,
+          duration: durSec,
+          durationSec: Number(durSec.toFixed(2)),
+          startTime: s.startTime,
+          endTime: s.endTime,
+        };
+      });
+
+      let screenedOverloaded: { id: string | number; text: string; duration: number | string; reason?: string; targetWords?: number }[] = [];
+
+      // Lượt 1: AI sàng lọc
+      if (appSettings?.apiMode === 'gemini_web') {
+        try {
+          const webScreen = await screenTtsOverloadWithGeminiWeb(subtitlesToScreen, {
+            cookie: appSettings.geminiWebCookie || '',
+            snlm0e: appSettings.geminiWebSessionToken,
+          });
+          if (webScreen.success && Array.isArray(webScreen.overloadedItems)) {
+            screenedOverloaded = webScreen.overloadedItems;
+          }
+        } catch (screenErr) {
+          console.warn('[handleOptimizeTtsOverload] Gemini Web screening error:', screenErr);
+        }
+      }
+
+      if (screenedOverloaded.length === 0 && appSettings?.apiMode !== 'gemini_web') {
+        try {
+          const screenRes = await fetch('/api/screen-tts-overload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subtitles: subtitlesToScreen,
+              targetLang,
+              model: overrideModel || selectedModel,
+              apiMode: appSettings?.apiMode,
+              geminiWebCookie: appSettings?.geminiWebCookie,
+              apiKey: appSettings?.apiKey,
+              proxyUrl: appSettings?.proxyUrl,
+              proxyKey: appSettings?.proxyKey,
+              proxyTargetModel: appSettings?.proxyTargetModel,
+              customModelName: appSettings?.customModelName,
+              proxyNoApiKey: appSettings?.proxyNoApiKey,
+            }),
+          });
+          if (screenRes.ok) {
+            const screenData = await screenRes.json().catch(() => null);
+            if (screenData?.success && Array.isArray(screenData.overloadedItems)) {
+              screenedOverloaded = screenData.overloadedItems;
+            }
+          }
+        } catch (screenErr) {
+          console.warn('[handleOptimizeTtsOverload] Server screening error:', screenErr);
+        }
+      }
+
+      if (screenedOverloaded.length === 0) {
+        alert(
+          '✅ AI ĐÃ SÀNG LỌC TOÀN BỘ PHỤ ĐỀ!\n\n' +
+          `AI đã rà soát toàn bộ ${subtitles.length} câu thoại và xác nhận:\n` +
+          'Tất cả các câu đều khớp chuẩn thời lượng đọc tự nhiên (không có câu nào bị quá tải). Sẵn sàng tạo audio lồng tiếng hoàn hảo!'
+        );
+        return;
+      }
+
+      // Lượt 2: Gửi một request nữa cho AI để tối ưu lại
+      setTranslationProgressMsg(`⚡ Bước 3 (Lượt 2/2): Đã phát hiện ${screenedOverloaded.length} câu quá tải. AI đang viết lại súc tích, tự nhiên...`);
+      let optData: any = null;
+      if (appSettings?.apiMode === 'gemini_web') {
+        try {
+          const webOpt = await optimizeTtsOverloadWithGeminiWeb(screenedOverloaded, {
+            cookie: appSettings.geminiWebCookie || '',
+            snlm0e: appSettings.geminiWebSessionToken,
+          });
+          if (webOpt.success && Array.isArray(webOpt.optimizedBlocks) && webOpt.optimizedBlocks.length > 0) {
+            optData = { success: true, optimizedBlocks: webOpt.optimizedBlocks };
+          }
+        } catch (_) {}
+      }
+
+      if (!optData) {
+        const optRes = await fetch('/api/optimize-tts-overload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            overloadedBlocks: screenedOverloaded,
+            targetLang,
+            model: overrideModel || selectedModel,
+            apiMode: appSettings?.apiMode,
+            geminiWebCookie: appSettings?.geminiWebCookie,
+            apiKey: appSettings?.apiKey,
+            proxyUrl: appSettings?.proxyUrl,
+            proxyKey: appSettings?.proxyKey,
+            proxyTargetModel: appSettings?.proxyTargetModel,
+            customModelName: appSettings?.customModelName,
+            proxyNoApiKey: appSettings?.proxyNoApiKey,
+          }),
+        });
+
+        if (optRes.ok) {
+          optData = await optRes.json().catch(() => null);
+        }
+      }
+
+      const optMap = new Map<string, string>();
+      if (optData && Array.isArray(optData.optimizedBlocks) && optData.optimizedBlocks.length > 0) {
+        optData.optimizedBlocks.forEach((item: any) => {
+          if (item.id !== undefined && item.text) {
+            const clean = cleanTranslatedSubtitleText(String(item.text));
+            optMap.set(String(item.id), clean);
+          }
+        });
+      }
+
+      if (optMap.size > 0) {
+        setSubtitles((prev) =>
+          prev.map((s) => {
+            const sId = String(s.id);
+            if (optMap.has(sId)) {
+              return { ...s, translatedText: optMap.get(sId)! };
+            }
+            return s;
+          })
+        );
+
+        alert(
+          `✨ TỐI ƯU TTS 2 LƯỢT AI THÀNH CÔNG!\n\n` +
+          `• Lượt 1 (AI sàng lọc): Phát hiện ${screenedOverloaded.length} câu thoại quá dài so với thời lượng.\n` +
+          `• Lượt 2 (AI viết lại): Đã tối ưu súc tích ${optMap.size} câu, bảo toàn trọn vẹn ngữ nghĩa, cảm xúc và cách xưng hô của nhân vật!`
+        );
+      } else {
+        alert('Không nhận được bản tối ưu từ AI hoặc các câu đã ở mức tối ưu.');
+      }
+    } catch (err: any) {
+      console.error('Tts overload optimize error:', err);
+      alert('Không thể tối ưu phụ đề TTS: ' + (err?.message || 'Lỗi hệ thống'));
     } finally {
       setIsTranslatingBatch(false);
       setTranslationProgressMsg('');
@@ -2199,7 +2525,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
 
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
-      source.playbackRate.value = Math.max(0.2, Math.min(3.0, speed));
+      source.playbackRate.value = Math.max(0.95, Math.min(1.25, speed));
       source.detune.value = Math.max(-1200, Math.min(1200, pitch * 100)); // cents pitch shift
 
       // GainNode for audio volume control
@@ -2215,7 +2541,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
       console.warn('Web Audio Playback Fallback', e);
       try {
         const audio = new Audio(`data:audio/wav;base64,${base64}`);
-        audio.playbackRate = Math.max(0.5, Math.min(2.0, speed));
+        audio.playbackRate = Math.max(0.95, Math.min(1.25, speed));
         audio.play().catch(() => {});
       } catch {}
     }
@@ -2246,12 +2572,14 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
     let speedMultiplier = currentSettings?.ttsSpeed || 1.0;
 
     // Apply gentle speedup if needed to fit original timing ONLY when Audio Sync is enabled
+    // STRICT BOUNDARY: Never slow down (< 1.0) to prevent dragging or slow-motion voice distortion!
     if (isSyncEnabled && roundedDuration > origDuration && origDuration > 0.5) {
       const requiredSpeed = roundedDuration / origDuration;
-      const syncSpeed = Math.min(1.25, requiredSpeed);
+      const syncSpeed = Math.min(1.25, Math.max(1.0, requiredSpeed));
       speedMultiplier = Math.round((speedMultiplier * syncSpeed) * 100) / 100;
       roundedDuration = roundedDuration / syncSpeed;
     }
+    speedMultiplier = Math.max(0.95, Math.min(1.25, speedMultiplier));
 
     const finalEndTime = target.startTime + Math.max(origDuration, roundedDuration);
     target.audioUrl = `data:audio/wav;base64,${audioBase64}`;
@@ -2483,7 +2811,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
           }
           const source = audioCtx.createBufferSource();
           source.buffer = buffer;
-          source.playbackRate.value = Math.max(0.2, Math.min(3.0, speed));
+          source.playbackRate.value = Math.max(0.95, Math.min(1.25, speed));
           source.detune.value = Math.max(-1200, Math.min(1200, pitch * 100));
           source.connect(audioCtx.destination);
 

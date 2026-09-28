@@ -139,14 +139,15 @@ export async function generateVoiceoverAudioBuffer(
       // Calculate original target duration
       const targetDuration = sub.endTime - sub.startTime;
       
-      // Smart Audio Fit Logic
+      // Smart Audio Fit Logic: Strict safe boundary [0.95, 1.25]
       let appliedSpeed = sub.speed || speedMultiplier || 1.0;
       if (!sub.speed) {
         if (normalDuration > targetDuration) {
           const requiredSpeed = normalDuration / targetDuration;
-          appliedSpeed = Math.min(1.35, requiredSpeed);
+          appliedSpeed = Math.min(1.25, Math.max(1.0, requiredSpeed));
         }
       }
+      appliedSpeed = Math.max(0.95, Math.min(1.25, appliedSpeed));
       
       const finalDuration = normalDuration / appliedSpeed;
 
@@ -189,9 +190,9 @@ export async function generateVoiceoverAudioBuffer(
     const source = offlineCtx.createBufferSource();
     source.buffer = item.buffer;
     
-    // Set custom playback rate according to Smart Audio Fit calculation
+    // Set custom playback rate within strict safe bounds [0.95, 1.25]
     if (item.speed !== 1.0) {
-      source.playbackRate.value = Math.max(0.2, Math.min(3.0, item.speed));
+      source.playbackRate.value = Math.max(0.95, Math.min(1.25, item.speed));
     }
 
     // Apply manual ttsPitch detuning + optional pitch compensation for playback speedup (1 semitone = 100 cents)

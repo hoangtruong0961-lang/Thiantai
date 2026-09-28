@@ -270,8 +270,8 @@ export async function generateCapCutTTS(
 
   const { voiceType, resourceId, displayName } = resolveCapCutVoice(options.voice);
   const rawRate = Number(options.rate) || 1.0;
-  // CapCut prosody rate formatted e.g. 1.0, 1.2
-  const rateStr = Math.max(0.5, Math.min(2.0, rawRate)).toFixed(1);
+  // CapCut prosody rate: NEVER slow down below 1.0x to eliminate slow motion distortion; cap speedup at 1.25x
+  const rateStr = Math.max(1.0, Math.min(1.25, rawRate)).toFixed(1);
 
   const device = DEFAULT_DEVICE;
   const babi = {

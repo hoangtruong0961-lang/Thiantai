@@ -1184,6 +1184,9 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                     const lane = subtitleLanes.get(sub.id) || 0;
                     const topOffset = 1 + lane * 25;
 
+                    const subDur = Math.max(0.4, (sub.endTime - sub.startTime));
+                    const subText = (sub.translatedText || sub.originalText || '').trim();
+
                     return (
                       <div
                         key={sub.id}
@@ -1205,9 +1208,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           top: `${topOffset}px`,
                           height: '24px',
                         }}
-                        title={`[${formatTimeLabel(sub.startTime, 0.1)} - ${formatTimeLabel(sub.endTime, 0.1)}]: ${
-                          sub.translatedText || sub.originalText
-                        }`}
+                        title={`[${formatTimeLabel(sub.startTime, 0.1)} - ${formatTimeLabel(sub.endTime, 0.1)}]: ${subText}`}
                       >
                         {/* Left White Drag Handle - Co giãn chiều ngang đầu block (chỉ hiện khi chọn) */}
                         {isSelected && (
@@ -1223,9 +1224,9 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                         )}
 
                         {/* Subtitle Text Content */}
-                        <div className="flex flex-col min-w-0 flex-1 justify-center px-1 pointer-events-none">
+                        <div className="flex items-center min-w-0 flex-1 px-1 pointer-events-none">
                           <span className="truncate select-none text-[10px] font-bold text-white leading-tight tracking-wide">
-                            {sub.translatedText || sub.originalText}
+                            {subText}
                           </span>
                         </div>
 
