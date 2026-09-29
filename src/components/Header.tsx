@@ -35,13 +35,15 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
         {/* Logo & Title */}
         <div className="flex items-center space-x-3">
-          <div className="bg-gradient-to-tr from-slate-600 via-slate-300 to-slate-100 p-2.5 rounded-xl shadow-lg shadow-slate-300/20 text-slate-900 flex items-center justify-center border border-white/40">
-            <Star className="w-6 h-6 fill-slate-900 text-slate-800 drop-shadow-[0_0_10px_rgba(255,255,255,0.9)]" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="BachTranlastor Logo"
+            className="w-10 h-10 rounded-xl object-contain shadow-lg shadow-slate-300/20 border border-white/30"
+          />
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl font-black tracking-wider text-metallic-silver drop-shadow-sm font-sans">
-                BachTranslate
+                BachTranlastor
               </h1>
               <span className="bg-slate-800/90 text-slate-300 border border-slate-600/70 text-[11px] font-bold px-2 py-0.5 rounded-full shadow-inner">
                 OCR & Synced Subtitles

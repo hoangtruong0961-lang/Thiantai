@@ -367,12 +367,14 @@ export const CapCutHomeView: React.FC<CapCutHomeViewProps> = ({
         {/* Top Header - Icon & BachTranslate Logo + License Badge */}
         <header className="px-4 py-3 bg-metallic-panel flex items-center justify-between sticky top-0 z-30 border-b border-slate-700/60 shadow-md">
           {/* Logo Left */}
-          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveTab('home')}>
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-slate-600 via-slate-300 to-slate-100 p-1 flex items-center justify-center shadow-md shadow-slate-300/20 border border-white/30">
-              <Star className="w-4 h-4 text-slate-950 fill-slate-900 drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
-            </div>
+          <div className="flex items-center space-x-2.5 cursor-pointer" onClick={() => setActiveTab('home')}>
+            <img
+              src="/logo.png"
+              alt="BachTranlastor Logo"
+              className="w-8 h-8 rounded-lg object-contain shadow-md shadow-slate-300/20 border border-white/20"
+            />
             <h1 className="text-xl font-black tracking-wider text-metallic-silver font-sans">
-              BachTranslate
+              BachTranlastor
             </h1>
           </div>
 
@@ -647,7 +649,7 @@ export const CapCutHomeView: React.FC<CapCutHomeViewProps> = ({
               <div className="flex items-center justify-between border-b border-slate-700/60 pb-2.5">
                 <div className="flex items-center space-x-2">
                   <DownloadCloud className="w-4 h-4 text-slate-300" />
-                  <h3 className="text-xs font-black text-metallic-silver uppercase tracking-wider">Tải / Import Video Vào BachTranslate</h3>
+                  <h3 className="text-xs font-black text-metallic-silver uppercase tracking-wider">Tải / Import Video Vào BachTranlastor</h3>
                 </div>
                 <button
                   onClick={() => {
@@ -1235,7 +1237,7 @@ export const CapCutHomeView: React.FC<CapCutHomeViewProps> = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                      Cộng Đồng BachTranslate
+                      Cộng Đồng BachTranlastor
                     </h3>
                     <p className="text-[11px] text-zinc-400">
                       Giao lưu, học hỏi và nhận hỗ trợ kỹ thuật
@@ -1254,7 +1256,7 @@ export const CapCutHomeView: React.FC<CapCutHomeViewProps> = ({
               {/* Information Card */}
               <div className="bg-[#121215] border border-zinc-800/90 rounded-2xl p-4 space-y-2.5 text-xs text-zinc-300 leading-relaxed">
                 <p className="font-semibold text-white">
-                  Chào mừng bạn đến với cộng đồng người dùng BachTranslate!
+                  Chào mừng bạn đến với cộng đồng người dùng BachTranlastor!
                 </p>
                 <p className="text-zinc-400 text-[11.5px]">
                   Tham gia nhóm Facebook chính thức để:

@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.bachduong.remixvideo',
-  appName: 'Remix Bach Translator & Video Editor',
+  appId: 'com.bachtranlastor.app',
+  appName: 'BachTranlastor',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
