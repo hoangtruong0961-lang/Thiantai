@@ -18,6 +18,7 @@ export interface RenderFrameOptions {
   liveOverlay?: { id: string; rect: RegionROI } | null;
   showCenterGuide?: boolean;
   gpuAcceleration?: boolean;
+  skipBaseVideo?: boolean;
 }
 
 /**
@@ -138,6 +139,7 @@ export function renderCompositedFrame(
     subLiveBox,
     liveOverlay,
     gpuAcceleration,
+    skipBaseVideo = false,
   } = options;
 
   if (vWidth <= 0 || vHeight <= 0) return;
@@ -145,33 +147,43 @@ export function renderCompositedFrame(
   // Global scale factor relative to standard 720p base height
   const scaleFactor = vHeight / 720;
 
-  // 1. Draw base video frame (with GPU Hardware acceleration if enabled)
-  const isVideoValid = videoSource && (
-    !(typeof HTMLVideoElement !== 'undefined' && videoSource instanceof HTMLVideoElement) ||
-    (videoSource.readyState >= 2 && videoSource.videoWidth > 0 && videoSource.videoHeight > 0)
-  );
+  // Configure high-fidelity subpixel rendering & antialiasing
+  try {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  } catch (_) {}
 
-  if (isVideoValid && videoSource) {
-    let handledByGpu = false;
-    if (gpuAcceleration && ctx.canvas) {
-      try {
-        handledByGpu = gpuShaderEngine.processFrame(videoSource, ctx.canvas as HTMLCanvasElement, blurOverlays);
-      } catch (_) {
-        handledByGpu = false;
-      }
-    }
-    if (!handledByGpu) {
-      try {
-        ctx.drawImage(videoSource, 0, 0, vWidth, vHeight);
-      } catch (err) {
-        // Fallback: fill black canvas if frame is currently unavailable
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, vWidth, vHeight);
-      }
-    }
+  // 1. Draw base video frame (or clear to transparent in preview mode to let native hardware video show)
+  if (skipBaseVideo) {
+    ctx.clearRect(0, 0, vWidth, vHeight);
   } else {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, vWidth, vHeight);
+    const isVideoValid = videoSource && (
+      !(typeof HTMLVideoElement !== 'undefined' && videoSource instanceof HTMLVideoElement) ||
+      (videoSource.readyState >= 2 && videoSource.videoWidth > 0 && videoSource.videoHeight > 0)
+    );
+
+    if (isVideoValid && videoSource) {
+      let handledByGpu = false;
+      if (gpuAcceleration && ctx.canvas) {
+        try {
+          handledByGpu = gpuShaderEngine.processFrame(videoSource, ctx.canvas as HTMLCanvasElement, blurOverlays);
+        } catch (_) {
+          handledByGpu = false;
+        }
+      }
+      if (!handledByGpu) {
+        try {
+          ctx.drawImage(videoSource, 0, 0, vWidth, vHeight);
+        } catch (err) {
+          // Fallback: fill black canvas if frame is currently unavailable
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, vWidth, vHeight);
+        }
+      }
+    } else {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, vWidth, vHeight);
+    }
   }
 
   // 2. Render Blur Overlays

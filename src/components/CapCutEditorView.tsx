@@ -3299,7 +3299,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
   return (
     <div className="min-h-screen bg-black text-slate-100 flex justify-center font-sans antialiased overflow-hidden">
       {/* Smartphone / PC Responsive Container Viewport */}
-      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-black h-screen flex flex-col relative shadow-2xl border-x border-zinc-900 overflow-hidden">
+      <div className="w-full max-w-md md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl bg-black h-screen flex flex-col relative shadow-2xl border-x border-zinc-900 overflow-hidden">
         
         {/* 1. CapCut Navigation Header - Matching Screenshot Layout */}
         <header className={`bg-black px-3 py-2 flex items-center justify-between relative h-[44px] ${showExportSettingsDropdown ? 'z-[150]' : 'z-40'}`}>
@@ -3398,7 +3398,7 @@ export const CapCutEditorView: React.FC<CapCutEditorViewProps> = ({
           )}
 
           {/* Responsive Video Canvas Container */}
-          <div className="flex-1 min-h-0 p-2 flex items-center justify-center overflow-hidden bg-black">
+          <div className="flex-1 min-h-0 p-1 sm:p-1.5 flex items-center justify-center overflow-hidden bg-black">
             <div className="w-full h-full max-h-full flex items-center justify-center min-h-0">
               <VideoPlayer
                 videoUrl={videoUrl}

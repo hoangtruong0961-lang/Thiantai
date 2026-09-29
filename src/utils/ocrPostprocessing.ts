@@ -689,7 +689,7 @@ export function isSameSubtitleLine(text1: string, text2: string, timeGap: number
   const raw1 = (text1 || '').trim().toLowerCase();
   const raw2 = (text2 || '').trim().toLowerCase();
   if (!raw1 || !raw2) return false;
-  if (raw1 === raw2) return true;
+  if (raw1 === raw2) return timeGap <= 0.85;
 
   // Extract core text by stripping edge ghost tokens & embedded noise tokens
   const clean1 = stripEdgeNoiseHanziTokens(stripEmbeddedNoiseTokens(raw1)).trim().toLowerCase();
@@ -697,26 +697,29 @@ export function isSameSubtitleLine(text1: string, text2: string, timeGap: number
 
   // If both have cleaned core text and they are identical (e.g. "Y 4 67 fiM SRr 咱们惹不起啊一" vs "咱们惹不起啊"):
   if (clean1 && clean2 && clean1 === clean2) {
-    return true;
+    return timeGap <= 0.85;
   }
 
   const effective1 = clean1 || raw1;
   const effective2 = clean2 || raw2;
 
   if (effective1 === effective2) {
-    return true;
+    return timeGap <= 0.85;
   }
 
   const minLen = Math.min(effective1.length, effective2.length);
   const maxLen = Math.max(effective1.length, effective2.length);
   const lenRatio = maxLen > 0 ? minLen / maxLen : 0;
+  const diffLen = maxLen - minLen;
 
-  // 1. Direct substring / inclusion check on core text
+  // Check substring relationships with DIRECTION AWARENESS:
+  // isSub1In2: text1 (earlier) is shorter, text2 (later) is longer (e.g. progressive typewriter)
+  // isSub2In1: text1 (earlier) is longer, text2 (later) is shorter (e.g. "这是黑莲阁的令牌" -> "黑莲阁")
   const isSub1In2 = effective2.includes(effective1);
   const isSub2In1 = effective1.includes(effective2);
   const hasSubstringRelation = isSub1In2 || isSub2In1;
 
-  // 2. Similarity metrics on core text
+  // Similarity metrics on core text
   const levSim = getTextSimilarityScore(effective1, effective2);
   const charOverlap = getCharacterOverlapRatio(effective1, effective2);
   const levDistance = Math.round((1 - levSim) * maxLen);
@@ -724,35 +727,48 @@ export function isSameSubtitleLine(text1: string, text2: string, timeGap: number
   // Check if text contains CJK ideographs
   const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(effective1) || /[\u4e00-\u9fff\u3400-\u4dbf]/.test(effective2);
 
-  // 3. Close temporal proximity check (timeGap <= 2.0s):
-  if (timeGap <= 2.0) {
-    // If one text is a substring/superstring of the other:
-    if (hasSubstringRelation) {
-      if (hasCjk) {
-        // In CJK, a 2+ char phrase occurring within 2.0s inside a longer sentence is 100% the same line!
-        // E.g., "咱们惹" vs "咱们惹不起啊", "这就" vs "这就去办", "咱们惹不起" vs "咱们惹不起啊"
-        if (minLen >= 2) return true;
-        if (minLen >= 1 && lenRatio >= 0.30 && timeGap <= 1.2) return true;
-      } else {
-        if (lenRatio >= 0.40 || minLen >= 3) return true;
+  // 1. Directional Substring Matching:
+  if (hasSubstringRelation) {
+    // Case A: Earlier text is LONGER, later text is SHORTER (e.g. "这是黑莲阁的令牌" -> "黑莲阁")
+    // When a full sentence already completed, a subsequent shorter phrase (like repeating a noun/person/place)
+    // is a separate dialogue line. It must NEVER be swallowed into the previous sentence!
+    if (isSub2In1 && effective1.length > effective2.length) {
+      // Only allow merging if it's a micro edge-noise fluctuation of almost identical length
+      // (e.g. "咱们惹不起啊" vs "咱们惹不起", diff <= 1 or lenRatio >= 0.85) within very short time
+      if ((diffLen <= 1 || lenRatio >= 0.85) && timeGap <= 0.40) {
+        return true;
       }
+      // If later text is significantly shorter (e.g. 3 chars vs 8 chars), it's a new standalone subtitle!
+      return false;
     }
 
-    // High similarity for single OCR character misreads (e.g. "与苏老节无关" vs "与苏老爷无关": levDistance = 1 out of 6)
-    if (hasCjk) {
-      if (levSim >= 0.60 || charOverlap >= 0.45) return true;
-      if (levDistance <= 2) return true;
-    } else {
-      if (levSim >= 0.70 && charOverlap >= 0.60) return true;
-      if (levDistance <= 2 && lenRatio >= 0.60) return true;
+    // Case B: Earlier text is SHORTER, later text is LONGER (e.g. "黑莲阁" -> "这是黑莲阁的令牌")
+    // This is progressive typewriter reveal. Frames must be contiguous with no silent gap (timeGap <= 0.35s).
+    if (isSub1In2 && effective2.length > effective1.length) {
+      if (timeGap <= 0.35) {
+        if (hasCjk) {
+          if (minLen >= 2 && (lenRatio >= 0.35 || minLen >= 3)) return true;
+        } else {
+          if (lenRatio >= 0.40 || minLen >= 3) return true;
+        }
+      }
+      // If timeGap > 0.35s, the silence gap indicates separate utterances, NOT progressive typing.
+      return false;
     }
   }
 
-  // 4. Medium time gap (2.0s < timeGap <= 2.8s)
-  if (timeGap <= 2.8) {
-    if (hasSubstringRelation && (minLen >= 2 || lenRatio >= 0.50)) return true;
-    if (levSim >= 0.75 && charOverlap >= 0.65) return true;
-    if (levDistance <= 2 && lenRatio >= 0.70) return true;
+  // 2. High similarity for single OCR character misreads on the same line
+  // (e.g. "与苏老节无关" vs "与苏老爷无关": levDistance = 1 out of 6, lenRatio = 1.0)
+  // Must have very close lengths (lenRatio >= 0.75) and short time gap (timeGap <= 0.70s).
+  if (timeGap <= 0.70 && lenRatio >= 0.75) {
+    if (hasCjk) {
+      if (levSim >= 0.75 && charOverlap >= 0.65) return true;
+      if (levDistance <= 1) return true;
+      if (levDistance <= 2 && maxLen >= 6 && levSim >= 0.70) return true;
+    } else {
+      if (levSim >= 0.75 && charOverlap >= 0.65) return true;
+      if (levDistance <= 2 && lenRatio >= 0.75) return true;
+    }
   }
 
   return false;
@@ -1344,28 +1360,31 @@ export function refineAndMergeSubtitles(
         // Check if there is an existing subtitle that truly duplicates, overlaps, or is a variant of this candidate
         let mergedIntoExisting = false;
         for (const m of mergedSubtitles) {
-          const isSameText = isSameSubtitleLine(m.originalText || '', bestText, 0);
           const timeGap = Math.max(0, Math.max(m.startTime, startTime) - Math.min(m.endTime, endTime));
           const hasOverlap = Math.min(m.endTime, endTime) - Math.max(m.startTime, startTime) > -0.20;
 
           const cleanM = stripEdgeNoiseHanziTokens(stripEmbeddedNoiseTokens(m.originalText || '')).trim().toLowerCase();
           const cleanB = stripEdgeNoiseHanziTokens(stripEmbeddedNoiseTokens(bestText)).trim().toLowerCase();
-          const isSub = (cleanM.length >= 2 && cleanB.length >= 2) && (cleanM.includes(cleanB) || cleanB.includes(cleanM));
+          const isSameText = isSameSubtitleLine(m.originalText || '', bestText, timeGap);
 
-          if ((isSameText || isSub) && timeGap <= 4.0) {
-            m.startTime = Math.min(m.startTime, startTime);
-            m.endTime = Math.max(m.endTime, endTime);
-            m.originalText = selectBestOcrText(m.originalText || '', bestText);
-            mergedIntoExisting = true;
-            break;
-          }
+          const minLen = Math.min(cleanM.length, cleanB.length);
+          const maxLen = Math.max(cleanM.length, cleanB.length);
+          const lenRatio = maxLen > 0 ? minLen / maxLen : 0;
+          const isSubMInB = cleanB.includes(cleanM); // M is shorter, B is longer (progressive)
+          const isSubBInM = cleanM.includes(cleanB); // M is longer, B is shorter
 
-          if (hasOverlap && (isSameText || isSub || (m.startTime <= startTime + 0.2 && m.endTime >= endTime - 0.2))) {
-            m.startTime = Math.min(m.startTime, startTime);
-            m.endTime = Math.max(m.endTime, endTime);
-            m.originalText = selectBestOcrText(m.originalText || '', bestText);
-            mergedIntoExisting = true;
-            break;
+          // Only merge across small gap (<= 0.35s) or overlap if strictly justified
+          if (timeGap <= 0.35 || hasOverlap) {
+            const isProgressive = isSubMInB && (lenRatio >= 0.40 || minLen >= 3);
+            const isMinorEdge = (isSubBInM || isSubMInB) && lenRatio >= 0.85;
+
+            if (isSameText || isProgressive || isMinorEdge) {
+              m.startTime = Math.min(m.startTime, startTime);
+              m.endTime = Math.max(m.endTime, endTime);
+              m.originalText = selectBestOcrText(m.originalText || '', bestText);
+              mergedIntoExisting = true;
+              break;
+            }
           }
         }
 
@@ -1406,19 +1425,23 @@ export function refineAndMergeSubtitles(
     const prevClean = stripEmbeddedNoiseTokens(prev.originalText || '').trim();
     const currClean = stripEmbeddedNoiseTokens(curr.originalText || '').trim();
 
+    const minCleanLen = Math.min(prevClean.length, currClean.length);
+    const maxCleanLen = Math.max(prevClean.length, currClean.length);
+    const cleanLenRatio = maxCleanLen > 0 ? minCleanLen / maxCleanLen : 0;
+
     const textSim = getTextSimilarityScore(prevClean || prev.originalText || '', currClean || curr.originalText || '');
     const charSim = getCharacterOverlapRatio(prevClean || prev.originalText || '', currClean || curr.originalText || '');
     const isDirectMatch = isSameSubtitleLine(prev.originalText || '', curr.originalText || '', Math.max(0, timeGap));
-    const isHighSimilarity = isDirectMatch || (textSim >= 0.75 && charSim >= 0.70);
+    const isHighSimilarity = isDirectMatch || (textSim >= 0.80 && charSim >= 0.75 && cleanLenRatio >= 0.75);
 
     const prevDuration = prev.endTime - prev.startTime;
     const currDuration = curr.endTime - curr.startTime;
     const isFlicker = prevDuration < 0.60 || currDuration < 0.60;
-    const dynamicMaxGap = isFlicker ? 0.95 : 0.65;
+    const dynamicMaxGap = isFlicker ? 0.75 : 0.50;
 
     // High similarity / matching text MUST overrule shot cut if timeGap is close!
     // This repairs lines split in half where second line has minor OCR typo or Latin contamination.
-    const canMerge = isHighSimilarity && (timeGap <= dynamicMaxGap || (!hasShotCut && timeGap <= dynamicMaxGap + 0.45));
+    const canMerge = isHighSimilarity && (timeGap <= dynamicMaxGap || (!hasShotCut && timeGap <= dynamicMaxGap + 0.25));
 
     if (canMerge) {
       // Seamlessly bridge / interpolate gap between line A and line B
@@ -1432,7 +1455,8 @@ export function refineAndMergeSubtitles(
 
   // Step D2: Multi-Pass Consolidation & Substring Variant Merging Pass
   // Guarantees that 3-4 slightly different OCR variants of the same original subtitle line
-  // (e.g. "咱们惹", "咱们惹不起", "咱们惹不起啊一", "咱们惹不起a") will NEVER be outputted separately.
+  // (e.g. "咱们惹", "咱们惹不起", "咱们惹不起啊一", "咱们惹不起a") will NEVER be outputted separately,
+  // while strictly preserving subsequent independent dialogue lines (e.g. "黑莲阁" following "这是黑莲阁的令牌").
   let pass3 = [...pass2];
   let pass3Changed = true;
   let pass3Passes = 0;
@@ -1459,24 +1483,38 @@ export function refineAndMergeSubtitles(
       const prevClean = stripEdgeNoiseHanziTokens(stripEmbeddedNoiseTokens(prev.originalText || '')).trim().toLowerCase();
       const currClean = stripEdgeNoiseHanziTokens(stripEmbeddedNoiseTokens(curr.originalText || '')).trim().toLowerCase();
 
+      const minCleanLen = Math.min(prevClean.length, currClean.length);
+      const maxCleanLen = Math.max(prevClean.length, currClean.length);
+      const cleanLenRatio = maxCleanLen > 0 ? minCleanLen / maxCleanLen : 0;
+
       const textSim = getTextSimilarityScore(prevClean, currClean);
       const charSim = getCharacterOverlapRatio(prevClean, currClean);
       const isDirectMatch = isSameSubtitleLine(prev.originalText || '', curr.originalText || '', Math.max(0, timeGap));
 
-      const isSub1 = currClean.length >= 1 && prevClean.includes(currClean);
-      const isSub2 = prevClean.length >= 1 && currClean.includes(prevClean);
-      const hasSubstringRelation = isSub1 || isSub2;
+      // Directional substring flags:
+      // isSub1: prev is longer, curr is shorter (e.g. 这是黑莲阁的令牌 -> 黑莲阁)
+      // isSub2: prev is shorter, curr is longer (e.g. 黑莲阁 -> 这是黑莲阁的令牌, progressive reveal)
+      const isSub1 = currClean.length >= 1 && prevClean.includes(currClean) && prevClean.length > currClean.length;
+      const isSub2 = prevClean.length >= 1 && currClean.includes(prevClean) && currClean.length > prevClean.length;
 
       const hasShotCut = transitionTimestamps?.some((t) => t >= prev.endTime - 0.1 && t <= curr.startTime + 0.1);
 
-      const shouldMerge = (isOverlapping || timeDistance <= 2.0) && (
-        isDirectMatch ||
-        hasSubstringRelation ||
-        charSim >= 0.45 ||
-        textSim >= 0.60
+      // Safe consolidation criteria:
+      // 1. Progressive typing reveal: shorter first, longer second, within contiguous playback (timeDistance <= 0.35s)
+      const isProgressiveTyping = isSub2 && (isOverlapping || timeDistance <= 0.35) && (cleanLenRatio >= 0.35 || minCleanLen >= 3);
+      // 2. Minor edge variation: dropped 1 trailing character or noise artifact (cleanLenRatio >= 0.85)
+      const isMinorEdgeVariant = (isSub1 || isSub2) && cleanLenRatio >= 0.85 && (isOverlapping || timeDistance <= 0.40);
+      // 3. Close OCR typo on same line: (textSim >= 0.85 or textSim >= 0.75 + charSim >= 0.75) with similar length
+      const isCloseTypo = (textSim >= 0.85 || (textSim >= 0.75 && charSim >= 0.75)) && cleanLenRatio >= 0.75 && (isOverlapping || timeDistance <= 0.50);
+
+      const shouldMerge = !hasShotCut && (
+        (isDirectMatch && (isOverlapping || timeDistance <= 0.50)) ||
+        isProgressiveTyping ||
+        isMinorEdgeVariant ||
+        isCloseTypo
       );
 
-      if (shouldMerge && (!hasShotCut || hasSubstringRelation || charSim >= 0.60)) {
+      if (shouldMerge) {
         prev.startTime = Math.min(prev.startTime, curr.startTime);
         prev.endTime = Math.max(prev.endTime, curr.endTime);
         prev.originalText = selectBestOcrText(prev.originalText || '', curr.originalText || '');

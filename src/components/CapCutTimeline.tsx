@@ -2,8 +2,6 @@ import React, { useRef, useState, useEffect } from 'react';
 import {
   Play,
   Pause,
-  ZoomIn,
-  ZoomOut,
   Scissors,
   Type,
   Volume2,
@@ -931,11 +929,11 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
       />
 
       {/* Top Control Bar - Separated with pure black background (#000000 / bg-black) */}
-      <div className="px-3 py-1 flex items-center justify-between text-xs relative min-h-[30px] h-[30px] bg-black border-b border-zinc-900 shadow-xs z-20">
+      <div className="px-3.5 py-1.5 flex items-center justify-between text-xs relative min-h-[36px] h-[36px] bg-black border-b border-zinc-900 shadow-xs z-20">
         {/* Left: Time indicator '01:03 / 03:14' */}
-        <div className="flex items-center space-x-1 font-mono text-[11px] text-slate-300 font-medium tracking-wide select-none">
-          <span className="text-white font-semibold">{formatMMSS(currentTime)}</span>
-          <span className="text-zinc-600 font-normal">/</span>
+        <div className="flex items-center space-x-1.5 font-mono text-xs text-slate-300 font-medium tracking-wide select-none">
+          <span className="text-white font-bold">{formatMMSS(currentTime)}</span>
+          <span className="text-zinc-500 font-normal">/</span>
           <span className="text-zinc-400">{formatMMSS(safeDuration)}</span>
         </div>
 
@@ -943,70 +941,37 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
           <button
             onClick={onTogglePlay}
-            className="p-1 text-white hover:scale-110 active:scale-90 transition cursor-pointer flex items-center justify-center"
+            className="p-1.5 text-white hover:scale-110 active:scale-90 transition cursor-pointer flex items-center justify-center"
             title={isPlaying ? 'Tạm dừng video' : 'Phát video'}
           >
             {isPlaying ? (
-              <Pause className="w-3.5 h-3.5 fill-white text-white" />
+              <Pause className="w-4 h-4 fill-white text-white" />
             ) : (
-              <Play className="w-3.5 h-3.5 fill-white text-white ml-0.5" />
+              <Play className="w-4 h-4 fill-white text-white ml-0.5" />
             )}
           </button>
         </div>
 
-        {/* Right: Zoom in/out, Undo, Redo, and CC Badge Icon */}
-        <div className="flex items-center space-x-1.5 sm:space-x-2">
-          {/* Zoom controls */}
-          <div className="flex items-center space-x-0.5 bg-zinc-800/60 rounded px-1 py-0.5 border border-zinc-700/50">
-            <button
-              type="button"
-              onClick={() => setZoom((prev) => Math.max(2, prev / 1.3))}
-              className="p-0.5 text-zinc-400 hover:text-white transition cursor-pointer active:scale-90"
-              title="Thu nhỏ timeline (Zoom Out)"
-            >
-              <ZoomOut className="w-3 h-3" />
-            </button>
-            <span className="text-[9px] font-mono text-zinc-400 px-0.5 select-none min-w-[20px] text-center">
-              {Math.round(zoom)}x
-            </span>
-            <button
-              type="button"
-              onClick={() => setZoom((prev) => Math.min(80, prev * 1.3))}
-              className="p-0.5 text-zinc-400 hover:text-white transition cursor-pointer active:scale-90"
-              title="Phóng to timeline (Zoom In)"
-            >
-              <ZoomIn className="w-3 h-3" />
-            </button>
-          </div>
-
+        {/* Right: Undo, Redo */}
+        <div className="flex items-center space-x-1 sm:space-x-1.5">
           <button
             type="button"
             onClick={onUndo}
             disabled={!canUndo}
-            className={`p-1 text-zinc-300 hover:text-white transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer active:scale-90`}
+            className={`p-1.5 text-zinc-300 hover:text-white transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer active:scale-90`}
             title="Hoàn tác (Undo)"
           >
-            <Undo className="w-3.5 h-3.5" />
+            <Undo className="w-4 h-4" />
           </button>
 
           <button
             type="button"
             onClick={onRedo}
             disabled={!canRedo}
-            className={`p-1 text-zinc-300 hover:text-white transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer active:scale-90`}
+            className={`p-1.5 text-zinc-300 hover:text-white transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer active:scale-90`}
             title="Làm lại (Redo)"
           >
-            <Redo className="w-3.5 h-3.5" />
-          </button>
-
-          {/* CC badge button */}
-          <button
-            type="button"
-            onClick={() => onSelectVideoBlock?.(false)}
-            className="w-4.5 h-4 rounded-none border border-white/90 flex items-center justify-center text-[8.5px] font-black text-white hover:bg-white/10 active:scale-90 transition cursor-pointer leading-none"
-            title="Phụ đề (CC)"
-          >
-            CC
+            <Redo className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -1019,7 +984,9 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
           onClick={() => setActiveHeaderPopover(null)}
         >
           {/* PLAYHEAD VERTICAL NEEDLE (Clean, no text label overlay) */}
-          <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-white z-40 pointer-events-none shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
+          <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-white z-40 pointer-events-none shadow-[0_0_8px_rgba(255,255,255,0.9)]">
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rotate-45 rounded-[1px] shadow-sm pointer-events-none" />
+          </div>
 
           <div
             ref={containerRef}
@@ -1060,14 +1027,14 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                 </div>
 
                 {/* ROW 1: TIME RULER - Clean Header */}
-                <div className="h-[18px] bg-[#121214] border-b border-zinc-800/80 mb-1 relative overflow-hidden select-none z-10">
+                <div className="h-[22px] bg-[#121214] border-b border-zinc-800/90 mb-1 relative overflow-hidden select-none z-10">
                   {visibleRulerTicks.map((tick, idx) => {
                     const leftPx = (tick.sec / safeDuration) * (containerWidth * zoom);
                     if (tick.isDot) {
                       return (
                         <div
                           key={`ruler-dot-${idx}`}
-                          className="absolute top-2 w-1 h-1 rounded-full bg-zinc-500/80 -translate-x-1/2 pointer-events-none"
+                          className="absolute top-2 w-1.5 h-1.5 rounded-full bg-zinc-500/90 -translate-x-1/2 pointer-events-none"
                           style={{ left: `${leftPx}px` }}
                         />
                       );
@@ -1076,7 +1043,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                       <React.Fragment key={idx}>
                         {/* Vertical Tick Line */}
                         <div
-                          className="absolute top-0 h-1.5 w-px bg-zinc-600 pointer-events-none"
+                          className="absolute top-0 h-2 w-px bg-zinc-500 pointer-events-none"
                           style={{ left: `${leftPx}px` }}
                         />
                         {/* Tick Label */}
@@ -1088,7 +1055,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           }`}
                           style={{ left: `${leftPx}px` }}
                         >
-                          <span className="text-[9px] font-mono text-zinc-400 font-medium whitespace-nowrap px-0.5 leading-none">
+                          <span className="text-[10px] font-mono text-zinc-300 font-semibold whitespace-nowrap px-0.5 leading-none">
                              {tick.label}
                           </span>
                         </div>
@@ -1098,7 +1065,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                 </div>
 
                 {/* ROW 2: VIDEO TRACK */}
-                <div className="h-[40px] bg-[#121214] border-b border-zinc-800/80 mb-1 relative flex items-center px-0 z-10">
+                <div className="h-[48px] bg-[#121214] border-b border-zinc-800/80 mb-1 relative flex items-center px-0 z-10">
                   {/* Video Track Rail Bar */}
                   <div
                     className="absolute inset-y-0 bg-[#202024] rounded-none z-0 pointer-events-none"
@@ -1113,7 +1080,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                       e.stopPropagation();
                       if (onSelectVideoBlock) onSelectVideoBlock(!isVideoSelected);
                     }}
-                    className={`absolute left-0 w-full h-[36px] font-medium overflow-hidden flex items-center justify-between px-2 rounded-none cursor-pointer transition-all z-10 ${
+                    className={`absolute left-0 w-full h-[44px] font-medium overflow-hidden flex items-center justify-between px-2.5 rounded-none cursor-pointer transition-all z-10 ${
                       isVideoSelected
                         ? 'bg-[#00BCD4] ring-2 ring-white border-2 border-white shadow-lg brightness-105'
                         : 'bg-[#00BCD4] hover:bg-[#00ACC1] border border-cyan-300/30 shadow-sm'
@@ -1128,19 +1095,19 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                       return (
                         <div
                           key={`vid-cut-${sec}`}
-                          className="absolute top-0 bottom-0 w-px bg-black/25 pointer-events-none z-0"
+                          className="absolute top-0 bottom-0 w-px bg-black/30 pointer-events-none z-0"
                           style={{ left: `${sliceLeftPx}px` }}
                         />
                       );
                     })}
 
                     {/* Dark Filename Badge inside Video Track matching screenshot */}
-                    <div className="relative z-10 bg-black/55 backdrop-blur-xs px-2 py-0.5 rounded-[4px] text-[11px] font-bold text-white flex items-center space-x-1 max-w-[260px] truncate shadow-xs">
+                    <div className="relative z-10 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-[5px] text-xs font-bold text-white flex items-center space-x-1.5 max-w-[320px] truncate shadow-xs">
                       <span className="truncate">{videoTitle || 'imported_video_1788567319567.mp4'}</span>
                     </div>
 
                     {isVideoSelected && (
-                      <span className="relative z-10 text-[9px] bg-black text-white font-extrabold px-1.5 py-0.5 rounded-[3px] shadow-sm">
+                      <span className="relative z-10 text-[10px] bg-black text-white font-extrabold px-2 py-0.5 rounded-[4px] shadow-sm">
                         Đang chọn
                       </span>
                     )}
@@ -1148,11 +1115,11 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                     {/* Left & Right Selection Trim Handles */}
                     {isVideoSelected && (
                       <>
-                        <div className="absolute left-0 top-0 bottom-0 w-2 bg-white rounded-none border-r border-zinc-400 shadow-md flex items-center justify-center z-30 pointer-events-none">
-                          <div className="w-0.5 h-4 bg-zinc-900" />
+                        <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-white rounded-none border-r border-zinc-400 shadow-md flex items-center justify-center z-30 pointer-events-none">
+                          <div className="w-0.5 h-5 bg-zinc-900" />
                         </div>
-                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white rounded-none border-l border-zinc-400 shadow-md flex items-center justify-center z-30 pointer-events-none">
-                          <div className="w-0.5 h-4 bg-zinc-900" />
+                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-white rounded-none border-l border-zinc-400 shadow-md flex items-center justify-center z-30 pointer-events-none">
+                          <div className="w-0.5 h-5 bg-zinc-900" />
                         </div>
                       </>
                     )}
@@ -1163,7 +1130,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                 <div 
                   className="bg-[#121214] border-b border-zinc-800/80 mb-1 relative flex items-center z-10"
                   style={{
-                    height: `${Math.max(26, numSubtitleLanes * 25 + 2)}px`,
+                    height: `${Math.max(32, numSubtitleLanes * 30 + 4)}px`,
                   }}
                 >
                   {/* Subtitle Track Rail Bar */}
@@ -1182,7 +1149,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
 
                     const isSelected = selectedSubtitleId === sub.id;
                     const lane = subtitleLanes.get(sub.id) || 0;
-                    const topOffset = 1 + lane * 25;
+                    const topOffset = 2 + lane * 30;
 
                     const subDur = Math.max(0.4, (sub.endTime - sub.startTime));
                     const subText = (sub.translatedText || sub.originalText || '').trim();
@@ -1197,7 +1164,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           if (onSelectSubtitle) onSelectSubtitle(sub);
                           if (onSelectAudio) onSelectAudio(null);
                         }}
-                        className={`absolute rounded-[4px] text-[10px] font-bold px-2 flex items-center justify-between transition-all cursor-pointer select-none touch-none ${
+                        className={`absolute rounded-[5px] text-[11px] font-bold px-2 flex items-center justify-between transition-all cursor-pointer select-none touch-none ${
                           isSelected
                             ? 'bg-[#E68A00] text-white z-30 font-black shadow-lg ring-2 ring-white border-2 border-white'
                             : 'bg-[#D97706] hover:bg-[#E68A00] text-white z-10 border border-white/60 shadow-xs'
@@ -1206,7 +1173,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           left: `${startPx}px`,
                           width: `${widthPx - 2}px`,
                           top: `${topOffset}px`,
-                          height: '24px',
+                          height: '28px',
                         }}
                         title={`[${formatTimeLabel(sub.startTime, 0.1)} - ${formatTimeLabel(sub.endTime, 0.1)}]: ${subText}`}
                       >
@@ -1215,17 +1182,17 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           <div
                             onMouseDown={(e) => handleStartDragHandle(e, sub, 'left')}
                             onTouchStart={(e) => handleStartDragHandle(e, sub, 'left')}
-                            className="absolute -left-1.5 top-0 bottom-0 w-2.5 bg-white rounded-l-[3px] border-r border-zinc-500/50 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-200 transition-colors"
+                            className="absolute -left-2 top-0 bottom-0 w-3 bg-white rounded-l-[4px] border-r border-zinc-500/50 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-200 transition-colors"
                             title="Kéo mốc bắt đầu phụ đề (co giãn chiều ngang)"
-                            style={{ height: '24px' }}
+                            style={{ height: '28px' }}
                           >
-                            <div className="w-0.5 h-2.5 bg-zinc-900 rounded-full pointer-events-none" />
+                            <div className="w-0.5 h-3 bg-zinc-900 rounded-full pointer-events-none" />
                           </div>
                         )}
 
                         {/* Subtitle Text Content */}
                         <div className="flex items-center min-w-0 flex-1 px-1 pointer-events-none">
-                          <span className="truncate select-none text-[10px] font-bold text-white leading-tight tracking-wide">
+                          <span className="truncate select-none text-[11px] font-bold text-white leading-tight tracking-wide">
                             {subText}
                           </span>
                         </div>
@@ -1235,11 +1202,11 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           <div
                             onMouseDown={(e) => handleStartDragHandle(e, sub, 'right')}
                             onTouchStart={(e) => handleStartDragHandle(e, sub, 'right')}
-                            className="absolute -right-1.5 top-0 bottom-0 w-2.5 bg-white rounded-r-[3px] border-l border-zinc-500/50 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-200 transition-colors"
+                            className="absolute -right-2 top-0 bottom-0 w-3 bg-white rounded-r-[4px] border-l border-zinc-500/50 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-200 transition-colors"
                             title="Kéo mốc kết thúc phụ đề (co giãn chiều ngang)"
-                            style={{ height: '24px' }}
+                            style={{ height: '28px' }}
                           >
-                            <div className="w-0.5 h-2.5 bg-zinc-900 rounded-full pointer-events-none" />
+                            <div className="w-0.5 h-3 bg-zinc-900 rounded-full pointer-events-none" />
                           </div>
                         )}
                       </div>
@@ -1251,7 +1218,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                 <div 
                   className="bg-[#121214] border-b border-zinc-800/80 mb-1 relative flex items-center z-10"
                   style={{
-                    height: `${Math.max(24, numTextLanes * 23 + 2)}px`,
+                    height: `${Math.max(30, numTextLanes * 28 + 4)}px`,
                   }}
                 >
                   {/* Text Track Rail Bar */}
@@ -1272,7 +1239,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
 
                     const isSelected = selectedTextOverlayId === t.id;
                     const lane = textLanes.get(t.id) || 0;
-                    const topOffset = 1 + lane * 23;
+                    const topOffset = 2 + lane * 28;
 
                     return (
                       <div
@@ -1285,7 +1252,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                         }}
                         onMouseDown={(e) => handleStartDragTextHandle(e, t, 'move')}
                         onTouchStart={(e) => handleStartDragTextHandle(e, t, 'move')}
-                        className={`absolute rounded-[4px] text-[9.5px] font-bold px-1.5 flex items-center justify-between transition-all cursor-grab active:cursor-grabbing select-none touch-none ${
+                        className={`absolute rounded-[5px] text-[10.5px] font-bold px-2 flex items-center justify-between transition-all cursor-grab active:cursor-grabbing select-none touch-none ${
                           isSelected
                             ? 'bg-[#0284c7] text-white z-30 font-black shadow-lg ring-2 ring-white border-2 border-white'
                             : 'bg-[#0369a1] text-white z-10 border border-white/20 shadow-xs hover:bg-[#0284c7]'
@@ -1294,7 +1261,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           left: `${startPx}px`,
                           width: `${widthPx - 2}px`,
                           top: `${topOffset}px`,
-                          height: '22px',
+                          height: '26px',
                         }}
                         title={`[Văn bản: ${formatTimeLabel(sTime, 0.1)} - ${formatTimeLabel(eTime, 0.1)}]: ${t.text}`}
                       >
@@ -1303,17 +1270,17 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           <div
                             onMouseDown={(e) => handleStartDragTextHandle(e, t, 'left')}
                             onTouchStart={(e) => handleStartDragTextHandle(e, t, 'left')}
-                            className="absolute -left-2 top-0 bottom-0 w-2 bg-white rounded-l-[3px] border-r border-zinc-400 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-100 transition-transform"
+                            className="absolute -left-2 top-0 bottom-0 w-2.5 bg-white rounded-l-[4px] border-r border-zinc-400 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-100 transition-transform"
                             title="Kéo mốc bắt đầu văn bản"
-                            style={{ height: '22px' }}
+                            style={{ height: '26px' }}
                           >
-                            <div className="w-0.5 h-2 bg-zinc-900 rounded-full" />
+                            <div className="w-0.5 h-2.5 bg-zinc-900 rounded-full" />
                           </div>
                         )}
 
                         {/* Text Content */}
                         <div className="flex flex-col min-w-0 flex-1 justify-center">
-                          <span className="truncate select-none pointer-events-none text-[9.5px] font-bold text-white leading-tight">
+                          <span className="truncate select-none pointer-events-none text-[10.5px] font-bold text-white leading-tight">
                             {t.text}
                           </span>
                         </div>
@@ -1323,11 +1290,11 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                           <div
                             onMouseDown={(e) => handleStartDragTextHandle(e, t, 'right')}
                             onTouchStart={(e) => handleStartDragTextHandle(e, t, 'right')}
-                            className="absolute -right-2 top-0 bottom-0 w-2 bg-white rounded-r-[3px] border-l border-zinc-400 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-100 transition-transform"
+                            className="absolute -right-2 top-0 bottom-0 w-2.5 bg-white rounded-r-[4px] border-l border-zinc-400 shadow-md flex items-center justify-center cursor-ew-resize z-40 touch-none active:bg-sky-100 transition-transform"
                             title="Kéo mốc kết thúc văn bản"
-                            style={{ height: '22px' }}
+                            style={{ height: '26px' }}
                           >
-                            <div className="w-0.5 h-2 bg-zinc-900 rounded-full" />
+                            <div className="w-0.5 h-2.5 bg-zinc-900 rounded-full" />
                           </div>
                         )}
                       </div>
@@ -1337,7 +1304,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
 
                 {/* ROW 5: AUDIO TRACK LANE */}
                 <div 
-                  className="h-[24px] bg-[#121214] border-b border-zinc-800/80 mb-1 relative flex items-center z-10"
+                  className="h-[32px] bg-[#121214] border-b border-zinc-800/80 mb-1 relative flex items-center z-10"
                 >
                   {/* Audio Track Rail Bar */}
                   <div
@@ -1383,7 +1350,7 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                               onPlayTTS(sub.translatedText || sub.originalText);
                             }
                           }}
-                          className={`absolute rounded-[4px] overflow-hidden transition-all cursor-pointer select-none flex items-center px-1 ${
+                          className={`absolute rounded-[5px] overflow-hidden transition-all cursor-pointer select-none flex items-center px-1.5 ${
                             isSelected
                               ? 'bg-[#00BDCD] ring-2 ring-white border-2 border-white shadow-md z-30 brightness-105'
                               : 'bg-[#00BDCD] hover:bg-[#00ADC0] border border-white/60 shadow-xs z-20'
@@ -1392,30 +1359,30 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                             left: `${startPx}px`,
                             width: `${widthPx - 2}px`,
                             top: '2px',
-                            height: '20px',
+                            height: '28px',
                           }}
                           title={`[Audio TTS] Tốc độ: ${speedText} | Cao độ: ${pitchText} | Nội dung: ${sub.translatedText || sub.originalText}`}
                         >
                           {/* Audio Waveform with Vertical Bars */}
                           <div className="absolute inset-0 opacity-35 pointer-events-none">
-                            {renderAudioWaveform(widthPx - 2, 20)}
+                            {renderAudioWaveform(widthPx - 2, 28)}
                           </div>
 
                           {/* Speed & Pitch Badge Overlay */}
-                          <div className="relative z-10 flex items-center justify-between w-full text-[9px] font-mono font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] truncate pointer-events-none leading-none">
-                            {widthPx >= 36 ? (
+                          <div className="relative z-10 flex items-center justify-between w-full text-[10px] font-mono font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] truncate pointer-events-none leading-none">
+                            {widthPx >= 40 ? (
                               <>
-                                <span className="bg-black/40 text-white px-1 py-0.5 rounded-[2px] leading-none">
+                                <span className="bg-black/50 text-white px-1.5 py-0.5 rounded-[3px] leading-none">
                                   {speedText}
                                 </span>
-                                {widthPx >= 68 && (
-                                  <span className="bg-black/40 text-cyan-200 px-1 py-0.5 rounded-[2px] leading-none ml-0.5">
+                                {widthPx >= 72 && (
+                                  <span className="bg-black/50 text-cyan-200 px-1.5 py-0.5 rounded-[3px] leading-none ml-1">
                                     {pitchText}
                                   </span>
                                 )}
                               </>
-                            ) : widthPx >= 18 ? (
-                              <span className="bg-black/40 text-white px-0.5 py-0.5 rounded-[2px] text-[8px] leading-none">
+                            ) : widthPx >= 20 ? (
+                              <span className="bg-black/50 text-white px-1 py-0.5 rounded-[3px] text-[8.5px] leading-none">
                                 {speedText}
                               </span>
                             ) : null}
@@ -1425,31 +1392,33 @@ export const CapCutTimeline: React.FC<CapCutTimelineProps> = ({
                     })}
                 </div>
 
-                {/* ROW 6: NHẠC NỀN TRACK LANE */}
-                <div className="h-[20px] bg-[#121214] border-b border-zinc-800/80 relative flex items-center px-0 z-10">
-                  {/* Nhạc nền Track Rail Bar */}
-                  <div
-                    className="absolute inset-y-0 bg-[#18181b] rounded-none z-0 pointer-events-none"
-                    style={{
-                      left: `-${playheadOffset}px`,
-                      width: `calc(100% + ${playheadOffset}px)`,
-                    }}
-                  />
+                {/* ROW 6: NHẠC NỀN TRACK LANE (Chỉ hiển thị khi đã chọn nhạc nền) */}
+                {Boolean(bgMusicTitle) && (
+                  <div className="h-[28px] bg-[#121214] border-b border-zinc-800/80 relative flex items-center px-0 z-10">
+                    {/* Nhạc nền Track Rail Bar */}
+                    <div
+                      className="absolute inset-y-0 bg-[#18181b] rounded-none z-0 pointer-events-none"
+                      style={{
+                        left: `-${playheadOffset}px`,
+                        width: `calc(100% + ${playheadOffset}px)`,
+                      }}
+                    />
 
-                  <div
-                    className="absolute left-0 right-0 h-[16px] bg-[#1e2229] border border-zinc-750 rounded-[3px] flex items-center justify-between px-2 overflow-hidden z-10"
-                    style={{
-                      top: '2px',
-                    }}
-                  >
-                    <div className="flex items-center space-x-1 relative z-10 truncate">
-                      <Music2 className="w-2.5 h-2.5 text-zinc-400 flex-shrink-0" />
-                      <span className="text-[8px] font-medium text-zinc-300 truncate">
-                        {bgMusicTitle || 'Chưa chọn nhạc nền'}
-                      </span>
+                    <div
+                      className="absolute left-0 right-0 h-[24px] bg-[#1e2229] border border-zinc-750 rounded-[4px] flex items-center justify-between px-2.5 overflow-hidden z-10"
+                      style={{
+                        top: '2px',
+                      }}
+                    >
+                      <div className="flex items-center space-x-1.5 relative z-10 truncate">
+                        <Music2 className="w-3 h-3 text-zinc-300 flex-shrink-0" />
+                        <span className="text-[9.5px] font-medium text-zinc-200 truncate">
+                          {bgMusicTitle}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
               </div>
             </div>

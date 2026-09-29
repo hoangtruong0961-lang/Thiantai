@@ -109,6 +109,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onChangeActiveClipIndex,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [fittedBox, setFittedBox] = useState<{ width: number; height: number } | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0);
 
   const [internalActiveClipIndex, setInternalActiveClipIndex] = useState<number>(0);
@@ -214,8 +216,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     });
   }, [videoRef]);
 
+  const calculateFittedBox = useCallback(() => {
+    if (!wrapperRef.current) return;
+    const w = wrapperRef.current.clientWidth;
+    const h = wrapperRef.current.clientHeight;
+    if (w <= 0 || h <= 0) return;
+
+    if (!videoAspectRatio || videoAspectRatio <= 0) {
+      setFittedBox({ width: w, height: h });
+      return;
+    }
+
+    const wrapperAspect = w / h;
+    if (videoAspectRatio >= wrapperAspect) {
+      const targetW = w;
+      const targetH = Math.round(w / videoAspectRatio);
+      setFittedBox({ width: targetW, height: targetH });
+    } else {
+      const targetH = h;
+      const targetW = Math.round(h * videoAspectRatio);
+      setFittedBox({ width: targetW, height: targetH });
+    }
+  }, [videoAspectRatio]);
+
+  useEffect(() => {
+    calculateFittedBox();
+  }, [calculateFittedBox]);
+
   // Keep videoDisplayRect synchronized on resize, metadata load, video events, or orientation change
   useEffect(() => {
+    calculateFittedBox();
     updateVideoDisplayRect();
     const video = videoRef.current;
 
@@ -224,6 +254,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const vAspect = video.videoWidth / video.videoHeight;
         setVideoAspectRatio((prev) => (prev !== vAspect ? vAspect : prev));
       }
+      calculateFittedBox();
       updateVideoDisplayRect();
     };
 
@@ -240,6 +271,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (video && video.videoWidth > 0 && video.videoHeight > 0) {
         const vAspect = video.videoWidth / video.videoHeight;
         setVideoAspectRatio((prev) => (prev !== vAspect ? vAspect : prev));
+        calculateFittedBox();
         updateVideoDisplayRect();
       } else {
         animFrameId = requestAnimationFrame(pollForDimensions);
@@ -248,13 +280,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     pollForDimensions();
 
     const observer = new ResizeObserver(() => {
+      calculateFittedBox();
       updateVideoDisplayRect();
     });
     if (containerRef.current) {
       observer.observe(containerRef.current);
     }
+    if (wrapperRef.current) {
+      observer.observe(wrapperRef.current);
+    }
 
-    window.addEventListener('resize', updateVideoDisplayRect);
+    const handleWindowResize = () => {
+      calculateFittedBox();
+      updateVideoDisplayRect();
+    };
+
+    window.addEventListener('resize', handleWindowResize);
     return () => {
       if (video) {
         video.removeEventListener('loadedmetadata', handleVideoSync);
@@ -265,9 +306,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       }
       if (animFrameId) cancelAnimationFrame(animFrameId);
       observer.disconnect();
-      window.removeEventListener('resize', updateVideoDisplayRect);
+      window.removeEventListener('resize', handleWindowResize);
     };
-  }, [updateVideoDisplayRect, videoUrl]);
+  }, [calculateFittedBox, updateVideoDisplayRect, videoUrl]);
 
   // High-performance cached geometry metrics to avoid DOM reflows during active touch/mouse dragging
   interface DragMetrics {
@@ -1013,10 +1054,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const rect = videoDisplayRectRef.current;
     if (!rect || !rect.width || !rect.height) return;
 
-    // Cap devicePixelRatio to 2.0 and clamp max dimension to prevent GPU texture limits & OOM in mobile WebViews
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const targetW = Math.max(1, Math.min(Math.round(rect.width * dpr), 1920));
-    const targetH = Math.max(1, Math.min(Math.round(rect.height * dpr), 1920));
+    // Cap devicePixelRatio to 2.5 and clamp max dimension to prevent GPU texture limits while giving razor-sharp text
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const targetW = Math.max(1, Math.min(Math.round(rect.width * dpr), 2560));
+    const targetH = Math.max(1, Math.min(Math.round(rect.height * dpr), 2560));
 
     if (canvas.width !== targetW || canvas.height !== targetH) {
       canvas.width = targetW;
@@ -1025,6 +1066,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    try {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+    } catch (_) {}
 
     try {
       renderCompositedFrame(ctx, {
@@ -1042,6 +1088,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         subLiveBox,
         liveRoi,
         liveOverlay,
+        skipBaseVideo: true,
       });
     } catch (renderErr) {
       console.warn('[VideoPlayer] renderCanvas safe catch:', renderErr);
@@ -1295,7 +1342,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   return (
     <div 
-      className="w-full h-full max-h-full flex items-center justify-center flex-1 relative isolate min-h-0 overflow-hidden p-0.5 sm:p-1"
+      ref={wrapperRef}
+      className="w-full h-full max-h-full flex items-center justify-center flex-1 relative isolate min-h-0 overflow-hidden p-0 sm:p-0.5"
     >
       {/* Dynamic Video Preview Frame - Automatically scales and adapts to the video aspect ratio */}
       <div
@@ -1311,14 +1359,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }}
         style={{
           aspectRatio: videoAspectRatio ? `${videoAspectRatio}` : undefined,
+          width: fittedBox ? `${fittedBox.width}px` : (videoAspectRatio && videoAspectRatio >= 1 ? '100%' : 'auto'),
+          height: fittedBox ? `${fittedBox.height}px` : (videoAspectRatio && videoAspectRatio < 1 ? '100%' : 'auto'),
           maxWidth: '100%',
           maxHeight: '100%',
         }}
-        className={`relative bg-black rounded-lg border border-slate-800/80 shadow-2xl overflow-hidden select-none cursor-pointer group flex items-center justify-center min-h-0 ${
-          videoAspectRatio 
-            ? (videoAspectRatio >= 1 ? 'w-full h-auto' : 'h-full w-auto')
-            : 'w-full h-full'
-        }`}
+        className="relative bg-black rounded-lg border border-slate-800/80 shadow-2xl overflow-hidden select-none cursor-pointer group flex items-center justify-center min-h-0"
       >
         {!videoUrl ? (
           <div className="absolute inset-0 z-40 bg-[#0d0e12] flex flex-col items-center justify-center p-6 text-center space-y-4">
