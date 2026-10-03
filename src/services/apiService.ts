@@ -1,17 +1,24 @@
 import axios from 'axios';
 import { GenDownloadResponse } from '../types';
+import { resolveApiUrl, isMobileCapacitor, getBackendBaseUrl } from '../utils/apiUrl';
 
 export const fetchDownloadLinks = async (videoUrl: string): Promise<GenDownloadResponse> => {
   try {
-    // Gọi qua Backend của bạn (/api/download) để ẩn API Key và tránh lỗi CORS
-    const response = await axios.post<GenDownloadResponse>('/api/download', {
+    const endpoint = resolveApiUrl('/api/download');
+    const response = await axios.post<GenDownloadResponse>(endpoint, {
       url: videoUrl
     });
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
+    if (isMobileCapacitor() && !getBackendBaseUrl()) {
+      return {
+        success: false,
+        error: 'Trên app Android APK, vui lòng vào Cài Đặt (Config) và nhập link "Máy Chủ Backend (Render/Cloud)" để bóc tách video bằng yt-dlp.'
+      };
+    }
     return {
       success: false,
-      error: 'Không thể kết nối đến máy chủ hoặc link không hợp lệ.'
+      error: error?.response?.data?.error || error?.message || 'Không thể kết nối đến máy chủ hoặc link không hợp lệ.'
     };
   }
 };
@@ -20,19 +27,19 @@ export const fetchDownloadLinks = async (videoUrl: string): Promise<GenDownloadR
  * Douyin Auth Handoff APIs
  */
 export const createDouyinHandoffApi = async (seriesId: number, targetAppId?: string) => {
-  const res = await axios.post('/api/douyin-handoff/create', { seriesId, targetAppId });
+  const res = await axios.post(resolveApiUrl('/api/douyin-handoff/create'), { seriesId, targetAppId });
   return res.data;
 };
 
 export const pollDouyinHandoffApi = async (handoffId: string, pollToken: string) => {
-  const res = await axios.get(`/api/douyin-handoff/poll/${encodeURIComponent(handoffId)}`, {
+  const res = await axios.get(resolveApiUrl(`/api/douyin-handoff/poll/${encodeURIComponent(handoffId)}`), {
     params: { pollToken },
   });
   return res.data;
 };
 
 export const completeDouyinHandoffApi = async (handoffId: string, completeNonce: string, miniappLoginCode: string) => {
-  const res = await axios.post(`/api/douyin-handoff/complete/${encodeURIComponent(handoffId)}`, {
+  const res = await axios.post(resolveApiUrl(`/api/douyin-handoff/complete/${encodeURIComponent(handoffId)}`), {
     completeNonce,
     miniappLoginCode,
   });
@@ -40,17 +47,17 @@ export const completeDouyinHandoffApi = async (handoffId: string, completeNonce:
 };
 
 export const createDirectSessionApi = async (token: string, userId: string, appId?: string) => {
-  const res = await axios.post('/api/douyin-handoff/direct-session', { token, userId, appId });
+  const res = await axios.post(resolveApiUrl('/api/douyin-handoff/direct-session'), { token, userId, appId });
   return res.data;
 };
 
 export const createGuestAutoSessionApi = async (userId?: string) => {
-  const res = await axios.post('/api/douyin-handoff/guest-auto-auth', { userId });
+  const res = await axios.post(resolveApiUrl('/api/douyin-handoff/guest-auto-auth'), { userId });
   return res.data;
 };
 
 export const analyzeDouyinHandoffSeriesApi = async (downloadSession: string, shareUrl: string) => {
-  const res = await axios.post('/api/douyin-handoff/analyze', { shareUrl }, {
+  const res = await axios.post(resolveApiUrl('/api/douyin-handoff/analyze'), { shareUrl }, {
     headers: { Authorization: `Bearer ${downloadSession}` },
   });
   return res.data;
@@ -63,7 +70,7 @@ export const resolveDouyinHandoffMediaApi = async (
   videoId?: number,
   appId?: string
 ) => {
-  const res = await axios.post('/api/douyin-handoff/resolve-media', {
+  const res = await axios.post(resolveApiUrl('/api/douyin-handoff/resolve-media'), {
     seriesId,
     episode,
     videoId,
@@ -75,12 +82,12 @@ export const resolveDouyinHandoffMediaApi = async (
 };
 
 export const parseDouyinShareLinkApi = async (shareUrl: string) => {
-  const res = await axios.post('/api/douyin-handoff/parse-share-link', { shareUrl });
+  const res = await axios.post(resolveApiUrl('/api/douyin-handoff/parse-share-link'), { shareUrl });
   return res.data;
 };
 
 export const getDouyinCapabilitiesApi = async () => {
-  const res = await axios.get('/api/douyin-handoff/capabilities');
+  const res = await axios.get(resolveApiUrl('/api/douyin-handoff/capabilities'));
   return res.data;
 };
 

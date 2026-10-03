@@ -250,6 +250,7 @@ export interface AppSettings {
   autoIdealPreset: boolean;            // Auto set ideal OCR configs
   genDownloadApiKey?: string;         // GenDownload API Key (https://gendownload.com/)
   videoDownloaderApiUrl?: string;     // Custom Video Downloader API Endpoint
+  backendServerUrl?: string;          // Remote Node.js / yt-dlp Backend URL (e.g. https://my-server.onrender.com for Capacitor APK)
   ttsProvider?: TTSProviderOption;     // 'capcut_tts' | 'gemini' | 'nghi_tts' | 'edge_tts' | 'tiktok_tts' | 'browser'
   capcutVoice?: string;                // CapCut Voice e.g. BV074_streaming (Cô Gái Hoạt Ngôn)
   nghiVoice?: string;                  // Nghi TTS Sherpa voice e.g. lacphi, duyoryx, ngochuyennew, ngocngan, maiphuong, minhquang

@@ -30,6 +30,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoIdealPreset: true,
   genDownloadApiKey: '',
   videoDownloaderApiUrl: 'https://gendownload.com/api',
+  backendServerUrl: '',
   ttsProvider: 'capcut_tts',
   capcutVoice: 'BV074_streaming',
   nghiVoice: 'lacphi',

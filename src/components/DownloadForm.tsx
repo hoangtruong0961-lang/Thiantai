@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { fetchDownloadLinks } from '../apiService';
 import { GenDownloadResponse, SubtitleTrack, VideoMedia } from '../types';
 import { Download, Film, Loader2, Play, AlertCircle, Sparkles, ExternalLink, CheckCircle2, MessageSquare, Subtitles } from 'lucide-react';
+import { resolveApiUrl } from '../utils/apiUrl';
 
 interface DownloadFormProps {
   onSelectVideoForEditor?: (videoUrl: string, title?: string) => void;
@@ -172,8 +173,8 @@ export const DownloadForm: React.FC<DownloadFormProps> = ({ onSelectVideoForEdit
                     .trim()
                     .substring(0, 80);
                   const filename = `${safeTitle}_${media.quality.replace(/\s+/g, '_')}.${media.extension || 'mp4'}`;
-                  const streamUrl = media.directUrl || `/api/proxy-video?url=${encodeURIComponent(media.url)}`;
-                  const downloadUrl = `/api/download-media?pageUrl=${encodeURIComponent(inputUrl.trim())}&formatId=${encodeURIComponent(media.formatId || '')}&filename=${encodeURIComponent(filename)}&fallbackUrl=${encodeURIComponent(media.url)}`;
+                  const streamUrl = media.directUrl ? resolveApiUrl(media.directUrl) : resolveApiUrl(`/api/proxy-video?url=${encodeURIComponent(media.url)}`);
+                  const downloadUrl = resolveApiUrl(`/api/download-media?pageUrl=${encodeURIComponent(inputUrl.trim())}&formatId=${encodeURIComponent(media.formatId || '')}&filename=${encodeURIComponent(filename)}&fallbackUrl=${encodeURIComponent(media.url)}`);
 
                   return (
                     <div
@@ -230,8 +231,8 @@ export const DownloadForm: React.FC<DownloadFormProps> = ({ onSelectVideoForEdit
                     .trim()
                     .substring(0, 80);
                   const filename = `${safeTitle}_Audio.${media.extension || 'mp3'}`;
-                  const streamUrl = media.directUrl || `/api/proxy-video?url=${encodeURIComponent(media.url)}`;
-                  const downloadUrl = `/api/download-media?pageUrl=${encodeURIComponent(inputUrl.trim())}&audioOnly=1&filename=${encodeURIComponent(filename)}&fallbackUrl=${encodeURIComponent(media.url)}`;
+                  const streamUrl = media.directUrl ? resolveApiUrl(media.directUrl) : resolveApiUrl(`/api/proxy-video?url=${encodeURIComponent(media.url)}`);
+                  const downloadUrl = resolveApiUrl(`/api/download-media?pageUrl=${encodeURIComponent(inputUrl.trim())}&audioOnly=1&filename=${encodeURIComponent(filename)}&fallbackUrl=${encodeURIComponent(media.url)}`);
 
                   return (
                     <div
@@ -319,7 +320,7 @@ export const DownloadForm: React.FC<DownloadFormProps> = ({ onSelectVideoForEdit
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {officialSubtitles.map((sub, index) => {
-                  const srtDownloadUrl = sub.downloadUrl || `/api/proxy-subtitle?url=${encodeURIComponent(sub.url)}&lang=${encodeURIComponent(sub.lang)}&type=official`;
+                  const srtDownloadUrl = sub.downloadUrl ? resolveApiUrl(sub.downloadUrl) : resolveApiUrl(`/api/proxy-subtitle?url=${encodeURIComponent(sub.url)}&lang=${encodeURIComponent(sub.lang)}&type=official`);
                   return (
                     <div
                       key={index}
@@ -373,7 +374,7 @@ export const DownloadForm: React.FC<DownloadFormProps> = ({ onSelectVideoForEdit
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {autoSubtitles.map((sub, index) => {
-                  const srtDownloadUrl = sub.downloadUrl || `/api/proxy-subtitle?url=${encodeURIComponent(sub.url)}&lang=${encodeURIComponent(sub.lang)}&type=auto`;
+                  const srtDownloadUrl = sub.downloadUrl ? resolveApiUrl(sub.downloadUrl) : resolveApiUrl(`/api/proxy-subtitle?url=${encodeURIComponent(sub.url)}&lang=${encodeURIComponent(sub.lang)}&type=auto`);
                   return (
                     <div
                       key={index}
@@ -424,7 +425,7 @@ export const DownloadForm: React.FC<DownloadFormProps> = ({ onSelectVideoForEdit
               </p>
               <div className="grid grid-cols-1 gap-2">
                 {danmakuTracks.map((sub, index) => {
-                  const srtDanmakuUrl = `/api/proxy-subtitle?url=${encodeURIComponent(sub.url)}&lang=danmaku&type=danmaku`;
+                  const srtDanmakuUrl = resolveApiUrl(`/api/proxy-subtitle?url=${encodeURIComponent(sub.url)}&lang=danmaku&type=danmaku`);
                   return (
                     <div
                       key={index}

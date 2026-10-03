@@ -44,6 +44,7 @@ import { storeMediaFileDB } from '../utils/idbStorage';
 import { ConfigView } from './ConfigView';
 import { MultiPlatformDownloaderView } from './MultiPlatformDownloaderView';
 import { LicenseState, isWhitelistedAdminMember } from '../utils/licenseManager';
+import { resolveApiUrl, isMobileCapacitor, getBackendBaseUrl } from '../utils/apiUrl';
 
 interface CapCutHomeViewProps {
   projects: Project[];
@@ -95,7 +96,7 @@ export const CapCutHomeView: React.FC<CapCutHomeViewProps> = ({
     setIsTtsGenerating(true);
     setTtsError(null);
     try {
-      const res = await fetch('/api/tts', {
+      const res = await fetch(resolveApiUrl('/api/tts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -295,7 +296,11 @@ export const CapCutHomeView: React.FC<CapCutHomeViewProps> = ({
     setExtractedData(null);
 
     try {
-      const res = await fetch('/api/download-video', {
+      if (isMobileCapacitor() && !getBackendBaseUrl()) {
+        throw new Error('Trên app Android APK, vui lòng vào Cài Đặt (Config) và nhập link "Máy Chủ Backend (Render/Cloud)" để bóc tách video bằng yt-dlp.');
+      }
+
+      const res = await fetch(resolveApiUrl('/api/download-video'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

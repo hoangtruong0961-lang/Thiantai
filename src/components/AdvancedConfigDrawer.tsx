@@ -90,6 +90,30 @@ export const AdvancedConfigDrawer: React.FC<AdvancedConfigDrawerProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ocr' | 'tts' | 'proxy' | 'debug'>('ocr');
+  const [isTestingBackend, setIsTestingBackend] = useState(false);
+  const [backendTestStatus, setBackendTestStatus] = useState<{ success: boolean; msg: string } | null>(null);
+
+  const handleTestBackendServer = async () => {
+    const url = (formData.backendServerUrl || '').trim().replace(/\/+$/, '');
+    if (!url) {
+      setBackendTestStatus({ success: false, msg: 'Vui lòng nhập URL máy chủ backend trước khi kiểm tra.' });
+      return;
+    }
+    setIsTestingBackend(true);
+    setBackendTestStatus(null);
+    try {
+      const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        setBackendTestStatus({ success: true, msg: '✓ Kết nối thành công! Server online và sẵn sàng tải video yt-dlp.' });
+      } else {
+        setBackendTestStatus({ success: false, msg: `Máy chủ phản hồi mã HTTP ${res.status}. Vui lòng kiểm tra lại.` });
+      }
+    } catch (err: any) {
+      setBackendTestStatus({ success: false, msg: `Không thể kết nối tới máy chủ: ${err?.message || 'Timeout hoặc máy chủ chưa mở'}` });
+    } finally {
+      setIsTestingBackend(false);
+    }
+  };
 
   return (
     <div className="bg-[#141418] border border-slate-800/80 rounded-3xl overflow-hidden shadow-2xl transition-all">
@@ -706,6 +730,75 @@ export const AdvancedConfigDrawer: React.FC<AdvancedConfigDrawerProps> = ({
                   )}
                 </div>
               )}
+
+              {/* CARD: MÁY CHỦ BACKEND CHO CAPACITOR APK */}
+              <div className="space-y-2.5 bg-[#0d0d11] border border-slate-800 p-4 rounded-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <DownloadCloud className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Máy Chủ Tải Video yt-dlp (Cloud Backend Server)
+                    </span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono">
+                    Capacitor APK &amp; Mobile
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Khi cài app độc lập lên điện thoại Android (Capacitor APK), điện thoại không có sẵn Python/yt-dlp. Bạn hãy dán link server Cloud miễn phí (Render, Koyeb, Railway...) vào đây để app điện thoại tải video đa nền tảng bình thường:
+                </p>
+
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={formData.backendServerUrl || ''}
+                    onChange={(e) => {
+                      handleChange('backendServerUrl', e.target.value);
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('vtranslate_backend_server_url', e.target.value.trim());
+                      }
+                    }}
+                    placeholder="https://ten-app-cua-ban.onrender.com"
+                    className="flex-1 bg-[#16161e] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestBackendServer}
+                    disabled={isTestingBackend || !formData.backendServerUrl?.trim()}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-md"
+                  >
+                    {isTestingBackend ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Kiểm tra...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Kiểm Tra</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {backendTestStatus && (
+                  <div
+                    className={`p-2.5 rounded-xl text-[11px] flex items-center gap-2 ${
+                      backendTestStatus.success
+                        ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                        : 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                    }`}
+                  >
+                    {backendTestStatus.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                    )}
+                    <span>{backendTestStatus.msg}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

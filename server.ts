@@ -12,7 +12,6 @@ import { Readable } from 'stream';
 import { exec, execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
 import axios from 'axios';
 import ytdl from '@distube/ytdl-core';
 import { createServer as createViteServer } from 'vite';
@@ -134,7 +133,20 @@ dotenv.config();
 const currentFilename = typeof __filename !== 'undefined' ? __filename : (process.argv[1] || path.join(process.cwd(), 'server.ts'));
 const currentDirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(currentFilename);
 
-const customRequire = typeof require !== 'undefined' ? require : createRequire(currentFilename);
+const customRequire: any = (() => {
+  if (typeof require === 'function') {
+    return require;
+  }
+  try {
+    return createRequire(currentFilename || path.join(process.cwd(), 'server.ts'));
+  } catch (_) {}
+  try {
+    return createRequire(path.join(process.cwd(), 'package.json'));
+  } catch (_) {}
+  return (id: string) => {
+    throw new Error(`Cannot require module ${id} in current environment`);
+  };
+})();
 let sherpaOnnxModule: any = null;
 function getSherpaOnnx() {
   if (!sherpaOnnxModule) {
@@ -727,7 +739,7 @@ async function stretchAudioWithAtempo(
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Trust first proxy (Cloud Run / Nginx) for accurate req.ip resolution
   app.set('trust proxy', 1);
@@ -3294,7 +3306,7 @@ ${JSON.stringify(compactChunk)}`;
         finalVoice = 'zh-CN-XiaoxiaoNeural';
       }
 
-      const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+      const { MsEdgeTTS, OUTPUT_FORMAT } = customRequire('msedge-tts');
       const tts = new MsEdgeTTS();
       await tts.setMetadata(finalVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
@@ -3593,7 +3605,7 @@ ${JSON.stringify(compactChunk)}`;
           console.log(`[TikTok-TTS] [Proxifly] Using cached proxy: ${proxyToUse}`);
         } else {
           try {
-            const Proxifly = require('proxifly');
+            const Proxifly = customRequire('proxifly');
             const proxifly = new Proxifly();
             const pResult = await proxifly.getProxy({
               protocol: 'http',
